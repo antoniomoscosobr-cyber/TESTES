@@ -18,7 +18,7 @@ const steps = [
 
 export default function HowItWorks() {
   return (
-    <section className="py-24 md:py-32 bg-lilas-bg">
+    <section id="como-funciona" className="py-24 md:py-32 bg-lilas-bg">
       <div className="max-w-5xl mx-auto px-6">
         <div className="text-center mb-16 animate-on-scroll">
           <p className="text-sm tracking-[0.2em] uppercase text-lilas mb-3 font-medium">Como funciona</p>

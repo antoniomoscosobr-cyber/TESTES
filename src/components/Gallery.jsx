@@ -9,7 +9,7 @@ const images = [
 
 export default function Gallery() {
   return (
-    <section className="py-24 md:py-32 bg-creme">
+    <section id="galeria" className="py-24 md:py-32 bg-creme">
       <div className="max-w-6xl mx-auto px-6">
         <div className="text-center mb-16 animate-on-scroll">
           <p className="text-sm tracking-[0.2em] uppercase text-lilas mb-3 font-medium">Galeria</p>

@@ -1,6 +1,6 @@
 export default function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center bg-creme">
+    <section className="relative min-h-screen flex items-center bg-creme pt-16">
       <div className="max-w-7xl mx-auto px-6 py-20 md:py-0 grid md:grid-cols-2 gap-12 items-center w-full">
         {/* Text */}
         <div className="order-2 md:order-1">
@@ -19,10 +19,10 @@ export default function Hero() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
             <a
-              href="#encomendar"
+              href="#cores"
               className="inline-flex items-center justify-center px-8 py-4 bg-preto-suave text-branco rounded-full text-sm font-medium tracking-wide hover:bg-texto transition-colors"
             >
-              Encomendar agora
+              Ver cores disponíveis
             </a>
             <a
               href="#produto"
@@ -37,9 +37,11 @@ export default function Hero() {
         <div className="order-1 md:order-2 flex justify-center">
           <div className="relative">
             <div className="w-72 h-72 md:w-96 md:h-96 rounded-full bg-lilas-bg flex items-center justify-center">
-              <div className="w-60 h-60 md:w-80 md:h-80 rounded-full img-placeholder text-texto-leve text-center p-8">
-                <span className="text-sm">Foto do comedouro lilás em fundo neutro</span>
-              </div>
+              <img
+                src="/TESTES/bowls/lilas.png"
+                alt="Comedouro Floral Pet Lilás"
+                className="w-60 h-60 md:w-80 md:h-80 object-contain"
+              />
             </div>
             {/* Price tag */}
             <div className="absolute -bottom-2 right-4 md:right-0 bg-branco rounded-2xl px-5 py-3 shadow-lg">
