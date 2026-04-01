@@ -7,7 +7,7 @@ const colors = [
   { name: 'Laranja', hex: '#FF8C42', image: '/TESTES/bowls/laranja.png' },
   { name: 'Verde', hex: '#66BB6A', image: '/TESTES/bowls/verde.png' },
   { name: 'Amarelo', hex: '#FFD166', image: '/TESTES/bowls/amarelo.png' },
-  { name: 'Lilás', hex: '#C9A7EB', image: '/TESTES/bowls/lilas.png' },
+  { name: 'Lilás', hex: '#C9A7EB', image: '/TESTES/bowls/lilás.png' },
 ]
 
 export default function ColorsCarousel() {

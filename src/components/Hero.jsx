@@ -38,7 +38,7 @@ export default function Hero() {
           <div className="relative">
             <div className="w-72 h-72 md:w-96 md:h-96 rounded-full bg-lilas-bg flex items-center justify-center">
               <img
-                src="/TESTES/bowls/lilas.png"
+                src="/TESTES/bowls/lilás.png"
                 alt="Comedouro Floral Pet Lilás"
                 className="w-60 h-60 md:w-80 md:h-80 object-contain"
               />

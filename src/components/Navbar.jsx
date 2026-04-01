@@ -17,7 +17,7 @@ export default function Navbar() {
         {/* Logo */}
         <a href="#" className="flex items-center gap-2">
           <img
-            src="/TESTES/logo/logo.png"
+            src="/TESTES/Logo M.M.svg"
             alt="m.m Pet Home Decor"
             className="h-10 w-auto"
           />
