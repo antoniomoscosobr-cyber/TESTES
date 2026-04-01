@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ['claude/initial-setup-w6rL6', 'main']
+    branches: ['claude/initial-setup-w6rL6', 'claude/pet-feeder-landing-page-rOOBg', 'main']
 
 permissions:
   contents: read
