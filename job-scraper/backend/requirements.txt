@@ -8,3 +8,4 @@ playwright==1.49.1
 apscheduler==3.10.4
 cryptography==44.0.0
 pydantic==2.10.3
+python-multipart==0.0.20
