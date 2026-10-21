@@ -54,6 +54,18 @@ test("legendas: páginas curtas e tempo por palavra proporcional ao tamanho", ()
   assert.equal(words.find((w) => w.text === "guerra")!.emphasis, true);
 });
 
+test("legendas: sem palavra sozinha, sem fechar em preposição e sem partir nomes", () => {
+  const text = (t: string) => paginate(t, [], 0, 4).map((p) => p.words.map((w) => w.text).join(" "));
+  const horas = text("noventa milhões de views em vinte e quatro horas.");
+  assert.ok(horas.every((p) => p.split(" ").length > 1), horas.join(" | "));
+  const weazel = text("Até o Weazel News voltou, cobrindo as doideiras da cidade.");
+  assert.ok(weazel.some((p) => p.includes("Weazel News")), weazel.join(" | "));
+  const vice = text("Bem-vindo a Leonida, a versão do GTA pra Flórida, com a Vice City de volta.");
+  assert.ok(vice.some((p) => p.includes("Vice City")), vice.join(" | "));
+  assert.ok(vice.every((p) => !/ (a|de|do|com)$/.test(p)), vice.join(" | "));
+  assert.ok(vice.every((p) => p.length <= 24));
+});
+
 test("ênfase ignora acento, caixa e pontuação", () => {
   const [page] = paginate("Você!", ["voce"], 0, 1);
   assert.equal(page.words[0].emphasis, true);

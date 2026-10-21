@@ -128,8 +128,8 @@ export function validatePlan(plan: EditPlan): EditPlan {
       .filter((g) => g.srcEnd - g.srcStart >= 0.1);
     if (s.segments.length === 0) throw new Error(`${s.id}: nenhum segmento dentro do trailer (0–${dur.toFixed(1)}s).`);
     const total = resolveTimeline(s, FPS).duration;
-    if (total < PRESET.minShortSeconds - 0.5 || total > PRESET.maxShortSeconds + 0.5) {
-      console.warn(`⚠ ${s.id}: ${total.toFixed(1)}s (fora de ${PRESET.minShortSeconds}–${PRESET.maxShortSeconds}s).`);
+    if (total < PRESET.minShortSeconds - 0.5 || total > PRESET.hardMaxShortSeconds + 0.5) {
+      console.warn(`⚠ ${s.id}: ${total.toFixed(1)}s (fora de ${PRESET.minShortSeconds}–${PRESET.hardMaxShortSeconds}s).`);
     }
   }
   return plan;

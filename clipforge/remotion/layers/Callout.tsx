@@ -52,7 +52,10 @@ const Callout: React.FC<{ item: CalloutItem; accent: string; seed: number }> = (
     [item, accent, u],
   );
 
-  const text: React.CSSProperties = { fontFamily: FONT_DISPLAY, fontSize: (vertical ? 120 : 104) * u, textTransform: "uppercase", lineHeight: 1 };
+  // Texto longo encolhe para caber na faixa (Anton em caixa alta ocupa ~0.46em por caractere).
+  const room = (vertical ? width : width * 0.5) * 0.9 - 80 * u;
+  const fontSize = Math.min((vertical ? 120 : 104) * u, room / (Math.max(1, item.text.length) * 0.46));
+  const text: React.CSSProperties = { fontFamily: FONT_DISPLAY, fontSize, textTransform: "uppercase", lineHeight: 1, whiteSpace: "nowrap" };
   let body: React.ReactNode;
   if (item.style === "badge") {
     body = (

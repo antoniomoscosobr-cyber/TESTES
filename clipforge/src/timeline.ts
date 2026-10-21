@@ -231,20 +231,63 @@ function sourceWords(line: Short["captions"][number]): { text: string; start: nu
 }
 
 // Páginas curtas estilo TikTok (até 4 palavras / 24 caracteres, quebra em fim de frase).
-function chunkPages(words: TimedWord[]): CaptionPage[] {
-  const pages: CaptionPage[] = [];
-  let cur: TimedWord[] = [];
-  const flush = () => {
-    if (cur.length) pages.push({ start: cur[0].start, end: cur[cur.length - 1].end, words: cur });
-    cur = [];
+// 5 palavras só quando cabem nos 24 caracteres e evitam uma quebra pior.
+const MAX_WORDS_HARD = 5;
+// Palavras que não devem fechar uma página ("…Leonida, a" / "versão do GTA").
+const WEAK_END = /^(a|o|as|os|e|é|de|do|da|dos|das|no|na|nos|nas|em|um|uma|com|pra|pro|que|por|se|the|of|and|to|in|is|an)$/i;
+
+// Quebra uma frase em páginas pelo menor custo: poucas páginas, sem palavra sozinha,
+// de preferência depois de vírgula, sem fechar em artigo/preposição nem partir nomes
+// ("Weazel | News", "Tom | Petty", "GTA | 6").
+function splitSentence(words: TimedWord[]): TimedWord[][] {
+  const n = words.length;
+  const pageCost = (j: number, i: number): number => {
+    const size = i - j;
+    const text = words.slice(j, i).map((w) => w.text).join(" ");
+    if (size > 1 && (size > MAX_WORDS_HARD || text.length > MAX_CHARS_PER_PAGE)) return Infinity;
+    const last = words[i - 1].text;
+    let c = 1 + 0.1 * (MAX_WORDS_PER_PAGE - size) ** 2;
+    if (size > MAX_WORDS_PER_PAGE) c += 0.6;
+    if (size === 1 && n > 1) c += 1.5;
+    if (i < n) {
+      const soft = /[,;:]$/.test(last);
+      if (!soft) c += 0.3;
+      if (WEAK_END.test(last)) c += 2;
+      if (!soft && /^\p{Lu}/u.test(last) && /^[\p{Lu}\d]/u.test(words[i].text)) c += 1.5;
+    }
+    return c;
   };
-  for (const w of words) {
-    const len = [...cur.map((x) => x.text), w.text].join(" ").length;
-    if (cur.length && (cur.length >= MAX_WORDS_PER_PAGE || len > MAX_CHARS_PER_PAGE)) flush();
-    cur.push(w);
-    if (/[.!?…]$/.test(w.text)) flush();
+  const best = new Array<number>(n + 1).fill(Infinity);
+  const from = new Array<number>(n + 1).fill(0);
+  best[0] = 0;
+  for (let i = 1; i <= n; i++) {
+    for (let j = Math.max(0, i - MAX_WORDS_HARD); j < i; j++) {
+      const c = best[j] + pageCost(j, i);
+      if (c < best[i]) {
+        best[i] = c;
+        from[i] = j;
+      }
+    }
   }
-  flush();
+  const out: TimedWord[][] = [];
+  for (let i = n; i > 0; i = from[i]) out.unshift(words.slice(from[i], i));
+  return out;
+}
+
+function chunkPages(words: TimedWord[]): CaptionPage[] {
+  const sentences: TimedWord[][] = [];
+  let cur: TimedWord[] = [];
+  for (const w of words) {
+    cur.push(w);
+    if (/[.!?…]$/.test(w.text)) {
+      sentences.push(cur);
+      cur = [];
+    }
+  }
+  if (cur.length) sentences.push(cur);
+  const pages: CaptionPage[] = sentences
+    .flatMap(splitSentence)
+    .map((ws) => ({ start: ws[0].start, end: ws[ws.length - 1].end, words: ws }));
   // Cada página fica na tela até a próxima começar (sem "piscar" entre palavras próximas).
   for (let i = 0; i < pages.length - 1; i++) {
     const gap = pages[i + 1].start - pages[i].end;

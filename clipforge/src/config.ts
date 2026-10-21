@@ -14,6 +14,7 @@ export { FPS } from "./timeline";
 export const PRESET = {
   minShortSeconds: 15,
   maxShortSeconds: 45,
+  hardMaxShortSeconds: 60, // plano editado à mão (ex.: short narrado) pode ir até aqui sem aviso
   targetShortSeconds: 30,
   shortsPerTrailer: 4,
   sceneThreshold: 0.3,
