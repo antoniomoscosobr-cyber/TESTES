@@ -40,7 +40,7 @@ Para testar sem trailer: `npm run fixture` gera `fixtures/fixture-trailer.mp4` (
 |---|---|---|
 | **analyze** | Proxy 30fps; cortes de cena e movimento (`scene` score do ffmpeg); telas pretas; energia, onsets/impactos, BPM e beats (spectral flux + DP beat tracking); 1 keyframe por shot e contact sheets 4×4; transcrição com whisper.cpp | `src/analyze/*`, saída `public/work/<slug>/analysis.json` |
 | **plan** | Janelas candidatas pontuadas (energia, movimento, ritmo de cortes, impactos, fala, pretos). O **diretor Claude** (`claude-opus-5-5`, visão + JSON estruturado) vê os contact sheets e a análise e roteiriza cada short: segmentos, reenquadramento, legendas PT-BR, hook, callouts, splashes e end card. Depois tudo é "snapado" a cortes de cena/beats/impactos | `src/plan/*`, saída `plan.json` |
-| **render** | Composições Remotion `Short916` (1080×1920) e `Short169` (1920×1080). Sem GPU, ~2,2 s de render por segundo de vídeo em 4 núcleos | `remotion/*`, `src/render/*` |
+| **render** | Composições Remotion `Short916` (1080×1920) e `Short169` (1920×1080). Sem GPU, em 4 núcleos, leva ~7–8 s de render por segundo de vídeo (um short de 30s ≈ 4 min) | `remotion/*`, `src/render/*` |
 
 O `plan.json` usa **tempos do trailer original**; `src/timeline.ts` converte para a linha do tempo do short (eventos fora dos segmentos são descartados). Dá para editar o `plan.json` à mão e renderizar de novo.
 
