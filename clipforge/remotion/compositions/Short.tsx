@@ -26,7 +26,7 @@ export const Short: React.FC<ShortProps> = ({ plan, shortIndex, hideCaptions, au
       <VideoFx tl={tl}>
         <VideoTrack tl={tl} src={plan.source.file} bgSrc={plan.source.bgFile} srcWidth={plan.source.width} srcHeight={plan.source.height} />
       </VideoFx>
-      {audioMode !== "sfx" ? <AudioTrack tl={tl} src={plan.source.file} ducking={audioMode === "mix"} /> : null}
+      {audioMode !== "sfx" ? <AudioTrack tl={tl} src={plan.source.file} ducking={audioMode === "mix"} sfx={plan.sfx} /> : null}
       <FlashLayer tl={tl} accent={accent} />
       <Splashes3D tl={tl} accent={accent} />
       {hideCaptions ? null : <Captions pages={tl.pages} accent={accent} />}

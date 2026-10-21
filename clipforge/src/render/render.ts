@@ -5,10 +5,12 @@ import { bundle } from "@remotion/bundler";
 import { renderMedia, renderStill, selectComposition, type ChromiumOptions } from "@remotion/renderer";
 import { FORMATS, OUT_DIR, PUBLIC_DIR, REMOTION_ENTRY, workPath, type FormatKey } from "../config";
 import type { EditPlan, ShortProps } from "../schema";
+import { FPS, resolveTimeline } from "../timeline";
 import { coverFrame, normalizeLoudness, writeSidecars } from "./publish";
 import { ensureSfx } from "./sfx";
 
-export type RenderOptions = { formats: FormatKey[]; only?: number[]; concurrency?: number };
+// extras=false: só os vídeos principais (sem a versão sem legenda e os stems de áudio).
+export type RenderOptions = { formats: FormatKey[]; only?: number[]; concurrency?: number; extras?: boolean };
 
 // Chromium a usar: CLIPFORGE_BROWSER, o headless do Playwright (ambientes de CI/nuvem) ou
 // null — aí o Remotion baixa o Chrome Headless Shell dele na primeira vez.
@@ -81,7 +83,7 @@ type Job = {
 
 // Lista do que renderizar por short. Shorts narrados ganham também a versão 9:16 sem legenda
 // (para quando o ritmo da voz não bater com as legendas) e os stems de áudio para mixar a voz.
-function jobsFor(plan: EditPlan, i: number, formats: FormatKey[], outDir: string): Job[] {
+function jobsFor(plan: EditPlan, i: number, formats: FormatKey[], outDir: string, extras = true): Job[] {
   const short = plan.shorts[i];
   const jobs: Job[] = formats.map((fmt) => ({
     label: `${short.id} ${fmt}`,
@@ -91,7 +93,7 @@ function jobsFor(plan: EditPlan, i: number, formats: FormatKey[], outDir: string
     kind: "video",
     cover: path.join(outDir, `${short.id}-${fmt}-cover.jpg`),
   }));
-  if (short.narration.length) {
+  if (extras && resolveTimeline(short, FPS, plan.beats).narration.length) {
     const fmt: FormatKey = formats.includes("9x16") ? "9x16" : formats[0];
     jobs.push({
       label: `${short.id} ${fmt} sem legenda`,
@@ -118,7 +120,7 @@ export async function renderPlan(plan: EditPlan, opts: RenderOptions): Promise<s
     for (const [i, short] of plan.shorts.entries()) {
       if (opts.only?.length && !opts.only.includes(i + 1)) continue;
       writeSidecars(plan, i, outDir);
-      for (const job of jobsFor(plan, i, opts.formats, outDir)) {
+      for (const job of jobsFor(plan, i, opts.formats, outDir, opts.extras ?? true)) {
         const inputProps: ShortProps = { plan, slug: "", shortIndex: i, ...job.props };
         const t0 = Date.now();
         let lastPct = -10;

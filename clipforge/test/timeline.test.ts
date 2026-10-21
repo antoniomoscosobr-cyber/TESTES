@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { paginate, resolveTimeline } from "../src/timeline";
+import { captionRows, paginate, resolveTimeline } from "../src/timeline";
 import { fakeShort } from "./helpers";
 
 test("segmentos viram sequências contíguas no short, respeitando a velocidade", () => {
@@ -64,6 +64,16 @@ test("legendas: sem palavra sozinha, sem fechar em preposição e sem partir nom
   assert.ok(vice.some((p) => p.includes("Vice City")), vice.join(" | "));
   assert.ok(vice.every((p) => !/ (a|de|do|com)$/.test(p)), vice.join(" | "));
   assert.ok(vice.every((p) => p.length <= 24));
+});
+
+test("duas linhas por página sem partir nomes nem fechar em artigo", () => {
+  const rows = (t: string, emphasis: string[] = []) =>
+    captionRows(t.split(" ").map((text) => ({ text, emphasis: emphasis.includes(text) }))).map((r) => r.map((w) => w.text).join(" "));
+  assert.deepEqual(rows("com a Vice City", ["Vice", "City"]), ["com a", "Vice City"]);
+  assert.deepEqual(rows("do Florida Man.", ["Florida", "Man."]), ["do", "Florida Man."]);
+  assert.deepEqual(rows("Relembra o trailer", ["trailer"]), ["Relembra", "o trailer"]);
+  assert.deepEqual(rows("Até o Weazel News"), ["Até", "o Weazel News"]);
+  assert.deepEqual(rows("caos total."), ["caos total."]);
 });
 
 test("ênfase ignora acento, caixa e pontuação", () => {

@@ -77,7 +77,7 @@ test("alinhamento de áudio acha o deslocamento entre duas versões do trailer",
   // o envelope guardado em arquivo (arredondado a 0.1 dB) alinha igual
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cf-env-")), "env.json");
   writeEnvelope(file, energyEnvelope(old, sr));
-  const again = findOffset(readEnvelope(file), energyEnvelope(shifted, sr), { maxShift: 3 });
+  const again = findOffset(readEnvelope(file).env, energyEnvelope(shifted, sr), { maxShift: 3 });
   assert.equal(again.offset, offset);
   fs.rmSync(path.dirname(file), { recursive: true, force: true });
 });
@@ -107,4 +107,119 @@ test("shiftPlan desloca segmentos e eventos, não a narração", () => {
   ]);
   assert.equal(out.shorts[0].splashes[0].srcTime, 41.3);
   assert.equal(out.shorts[0].narration[0].start, 1);
+});
+
+const planWith = (short: ReturnType<typeof fakeShort>) =>
+  EditPlanSchema.parse({
+    version: 1,
+    slug: "x",
+    game: "X",
+    director: "heuristic",
+    source: { file: "", duration: 60, fps: 30, width: 1920, height: 1080 },
+    shorts: [short],
+  });
+
+test("legenda original só perde as palavras que ficam sob a narração", () => {
+  const tl = resolveTimeline(
+    fakeShort({
+      segments: [{ srcStart: 0, srcEnd: 30, speed: 1, focusX: 0.5, fit: "crop" }],
+      captions: [{ srcStart: 5, srcEnd: 11, text: "We will rise again and take back what is ours from them", emphasis: [] }],
+      narration: [{ start: 2.8, end: 5.2, text: "Olha só isso aqui gente", emphasis: [] }],
+    }),
+    30,
+  );
+  const words = tl.pages.flatMap((p) => p.words.map((w) => w.text));
+  assert.ok(words.includes("ours"), words.join(" "));
+  assert.ok(!words.includes("We"), "a palavra sob a narração sai");
+  for (let i = 1; i < tl.pages.length; i++) assert.ok(tl.pages[i].start >= tl.pages[i - 1].end - 1e-6);
+});
+
+test("narração sobreposta é normalizada igual no vídeo, no roteiro e no .srt", () => {
+  const plan = planWith(
+    fakeShort({
+      segments: [{ srcStart: 0, srcEnd: 30, speed: 1, focusX: 0.5, fit: "crop" }],
+      narration: [
+        { start: 1, end: 4, text: "Primeira fala do vídeo.", emphasis: [] },
+        { start: 3.5, end: 6, text: "Segunda fala começa antes.", emphasis: [] },
+        { start: 5.9, end: 6.05, text: "Sim!", emphasis: [] },
+        { start: 40, end: 42, text: "Depois do fim.", emphasis: [] },
+      ],
+    }),
+  );
+  const tl = resolveTimeline(plan.shorts[0], 30);
+  assert.deepEqual(tl.narration.map((n) => [n.start, n.end]), [
+    [1, 4],
+    [4, 6],
+  ]);
+  const srt = narrationSrt(plan, 0);
+  assert.match(srt, /00:00:04,000 --> 00:00:06,000\nSegunda fala/);
+  assert.doesNotMatch(srt, /Sim!|Depois/);
+  assert.match(scriptText(plan, 0), /2 falas/);
+});
+
+test("palavras de uma fala que passa do fim seguem o ritmo original", () => {
+  const tl = resolveTimeline(
+    fakeShort({
+      segments: [{ srcStart: 0, srcEnd: 20, speed: 1, focusX: 0.5, fit: "crop" }],
+      narration: [{ start: 13, end: 22, text: "um dois três quatro cinco seis sete oito nove dez onze doze", emphasis: [] }],
+    }),
+    30,
+  );
+  assert.equal(tl.narration[0].end, 20);
+  const sete = tl.pages.flatMap((p) => p.words).find((w) => w.text === "sete");
+  // espalhadas por 13–22s, "sete" cai depois do card final (17.2s) e não aparece
+  assert.equal(sete, undefined);
+});
+
+test("roteiro arredonda o timecode sem gerar 00:60.0", () => {
+  const plan = planWith(
+    fakeShort({
+      segments: [{ srcStart: 0, srcEnd: 70, speed: 1, focusX: 0.5, fit: "crop" }],
+      narration: [{ start: 59.96, end: 62, text: "Virada do minuto.", emphasis: [] }],
+    }),
+  );
+  const txt = scriptText(plan, 0);
+  assert.match(txt, /\[01:00\.0 → 01:02\.0\]/);
+  assert.doesNotMatch(txt, /:60\.0/);
+});
+
+test("shiftPlan mantém o comprimento dos segmentos e tira os que caem antes do início", () => {
+  const plan = planWith(
+    fakeShort({
+      segments: [
+        { srcStart: 0.3, srcEnd: 0.8, speed: 1, focusX: 0.5, fit: "crop" },
+        { srcStart: 0.5, srcEnd: 2, speed: 1, focusX: 0.5, fit: "crop" },
+        { srcStart: 10, srcEnd: 12, speed: 1, focusX: 0.5, fit: "crop" },
+      ],
+    }),
+  );
+  const out = shiftPlan(plan, [[-1, -1, -1]]);
+  assert.deepEqual(out.shorts[0].segments.map((s) => [s.srcStart, s.srcEnd]), [
+    [0, 1.5],
+    [9, 11],
+  ]);
+});
+
+test("segmento sem par no arquivo novo não passa como casamento", () => {
+  const sr = 8000;
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
+  const noise = (seconds: number, rate: number) => {
+    const out = new Float32Array(sr * seconds);
+    for (let i = 0; i < out.length; i++) out[i] = rnd() * (Math.sin((i / sr) * rate) > 0.3 ? 1 : 0.05);
+    return out;
+  };
+  const old = energyEnvelope(noise(20, 2.3), sr);
+  const other = energyEnvelope(noise(20, 3.7), sr);
+  const { score } = findOffset(old, other, { from: 5, to: 7, maxShift: 5, around: 0 });
+  assert.ok(score < 0.8, `score ${score}`);
+});
+
+test("envelope guardado leva a forma da fonte", () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cf-env-")), "env.json");
+  writeEnvelope(file, Float32Array.from([1, 2, 3]), { duration: 90.1, width: 640, height: 360 });
+  const { env, source } = readEnvelope(file);
+  assert.deepEqual(Array.from(env), [1, 2, 3]);
+  assert.deepEqual(source, { duration: 90.1, width: 640, height: 360 });
+  fs.rmSync(path.dirname(file), { recursive: true, force: true });
 });

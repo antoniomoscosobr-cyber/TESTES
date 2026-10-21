@@ -99,11 +99,18 @@ export function resolveTimeline(short: Short, fps: number, sourceBeats: number[]
   };
 
   // ---- Legendas ----
-  const narration = short.narration
-    .filter((n) => n.end > n.start && n.text.trim())
-    .map((n) => ({ start: Math.max(0, n.start), end: Math.min(duration, n.end), text: n.text.trim(), emphasis: n.emphasis }))
-    .filter((n) => n.end > n.start)
-    .sort((a, b) => a.start - b.start);
+  // Narração normalizada uma vez (em ordem, sem sobreposição, dentro do short): legendas,
+  // ducking, roteiro e .srt usam os mesmos tempos. As palavras seguem o fim original da fala,
+  // para o ritmo não acelerar quando ela passa do fim do vídeo (o card final corta as páginas).
+  const narration: { start: number; end: number; wordsEnd: number; text: string; emphasis: string[] }[] = [];
+  for (const n of [...short.narration].sort((x, y) => x.start - y.start)) {
+    const text = n.text.trim();
+    const prev = narration[narration.length - 1];
+    const start = Math.max(0, n.start, prev ? prev.end : 0);
+    const end = Math.min(duration, n.end);
+    if (!text || end - start < MIN_PAGE) continue;
+    narration.push({ start, end, wordsEnd: Math.max(end, n.end), text, emphasis: n.emphasis });
+  }
   const underNarration = (a: number, b: number) => narration.some((n) => a < n.end && b > n.start);
   const lines: TimedWord[][] = [];
   for (const line of short.captions) {
@@ -125,12 +132,22 @@ export function resolveTimeline(short: Short, fps: number, sourceBeats: number[]
       end: mapInRun(run, Math.min(w.end, run.srcEnd)),
       emphasis: w.emphasis,
     }));
-    // A narração tem prioridade: fala original por baixo dela não vira legenda.
-    if (!underNarration(mapped[0].start, mapped[mapped.length - 1].end)) lines.push(mapped);
+    // A narração tem prioridade: palavras da fala original por baixo dela não viram legenda.
+    // O resto da frase continua, em trechos contínuos (sem sobra de uma palavra só).
+    let part: TimedWord[] = [];
+    const flush = () => {
+      if (part.length >= 2 || (part.length && part.length === mapped.length)) lines.push(part);
+      part = [];
+    };
+    for (const w of mapped) {
+      if (underNarration(w.start, w.end)) flush();
+      else part.push(w);
+    }
+    flush();
   }
   // Narração: já está no tempo do short; palavras distribuídas pela duração de cada fala.
   for (const n of narration) {
-    const words = sourceWords({ srcStart: n.start, srcEnd: n.end, text: n.text, emphasis: n.emphasis });
+    const words = sourceWords({ srcStart: n.start, srcEnd: n.wordsEnd, text: n.text, emphasis: n.emphasis });
     if (words.length) lines.push(words);
   }
   lines.sort((x, y) => x[0].start - y[0].start);
@@ -236,6 +253,9 @@ const MAX_WORDS_HARD = 5;
 // Palavras que não devem fechar uma página ("…Leonida, a" / "versão do GTA").
 const WEAK_END = /^(a|o|as|os|e|é|de|do|da|dos|das|no|na|nos|nas|em|um|uma|com|pra|pro|que|por|se|the|of|and|to|in|is|an)$/i;
 
+// "Weazel | News", "GTA | 6": a quebra cairia no meio de um nome.
+const splitsName = (a: string, b: string) => !/[,;:.!?…]$/.test(a) && /^\p{Lu}/u.test(a) && /^[\p{Lu}\d]/u.test(b);
+
 // Quebra uma frase em páginas pelo menor custo: poucas páginas, sem palavra sozinha,
 // de preferência depois de vírgula, sem fechar em artigo/preposição nem partir nomes
 // ("Weazel | News", "Tom | Petty", "GTA | 6").
@@ -253,7 +273,7 @@ function splitSentence(words: TimedWord[]): TimedWord[][] {
       const soft = /[,;:]$/.test(last);
       if (!soft) c += 0.3;
       if (WEAK_END.test(last)) c += 2;
-      if (!soft && /^\p{Lu}/u.test(last) && /^[\p{Lu}\d]/u.test(words[i].text)) c += 1.5;
+      if (splitsName(last, words[i].text)) c += 1.5;
     }
     return c;
   };
@@ -301,6 +321,25 @@ function clampPage(p: CaptionPage, limit: number): CaptionPage | null {
   if (p.end <= limit) return p;
   const words = p.words.filter((w) => w.start < limit).map((w) => ({ ...w, end: Math.min(w.end, limit) }));
   return words.length ? { start: p.start, end: limit, words } : null;
+}
+
+// Página que não cabe numa linha vira duas linhas equilibradas, sem partir nomes nem fechar a
+// primeira linha em artigo/preposição ("COM A / VICE CITY", não "COM A VICE / CITY").
+const ONE_LINE_CHARS = 15;
+const rowLength = (ws: { text: string; emphasis: boolean }[]) => ws.reduce((acc, w) => acc + w.text.length + (w.emphasis ? 2 : 0), 0) + ws.length - 1;
+export function captionRows<W extends { text: string; emphasis: boolean }>(words: W[]): W[][] {
+  if (words.length < 2 || rowLength(words) <= ONE_LINE_CHARS) return [words];
+  let cut = 1;
+  let best = Infinity;
+  for (let k = 1; k < words.length; k++) {
+    const a = words[k - 1].text;
+    const cost = Math.max(rowLength(words.slice(0, k)), rowLength(words.slice(k))) + (WEAK_END.test(a) ? 4 : 0) + (splitsName(a, words[k].text) ? 100 : 0);
+    if (cost < best) {
+      best = cost;
+      cut = k;
+    }
+  }
+  return [words.slice(0, cut), words.slice(cut)];
 }
 
 // Mantido para uso direto (e testes): distribui uma frase num intervalo do short.

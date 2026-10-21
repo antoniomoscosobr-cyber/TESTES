@@ -1,6 +1,6 @@
 import React from "react";
 import { Sequence, useVideoConfig } from "remotion";
-import type { CaptionPage } from "../../src/timeline";
+import { captionRows, type CaptionPage } from "../../src/timeline";
 import { FONT_BODY } from "../fonts";
 import { useGsapTimeline } from "../gsap/useGsapTimeline";
 import { useLayout } from "../layout";
@@ -23,25 +23,6 @@ export const Captions: React.FC<{ pages: CaptionPage[]; accent: string }> = ({ p
     </>
   );
 };
-
-// Página que não cabe numa linha vira duas linhas equilibradas ("FALTA MENOS / DE UM MÊS",
-// não "FALTA MENOS DE UM / MÊS").
-const ONE_LINE_CHARS = 15;
-type Word = CaptionPage["words"][number];
-const rowLength = (ws: Word[]) => ws.reduce((acc, w) => acc + w.text.length + (w.emphasis ? 2 : 0), 0) + ws.length - 1;
-export function captionRows(words: Word[]): Word[][] {
-  if (words.length < 2 || rowLength(words) <= ONE_LINE_CHARS) return [words];
-  let cut = 1;
-  let widest = Infinity;
-  for (let k = 1; k < words.length; k++) {
-    const w = Math.max(rowLength(words.slice(0, k)), rowLength(words.slice(k)));
-    if (w < widest) {
-      widest = w;
-      cut = k;
-    }
-  }
-  return [words.slice(0, cut), words.slice(cut)];
-}
 
 const Page: React.FC<{ page: CaptionPage; accent: string }> = ({ page, accent }) => {
   const { u, width, captionY } = useLayout();

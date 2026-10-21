@@ -76,15 +76,19 @@ export function writeSidecars(plan: EditPlan, index: number, outDir: string): st
     ),
   );
   const files = [`${base}.txt`, `${base}.json`];
-  if (short.narration.length) {
-    fs.writeFileSync(`${base}-roteiro.txt`, scriptText(plan, index));
-    fs.writeFileSync(`${base}-narracao.srt`, narrationSrt(plan, index));
-    files.push(`${base}-roteiro.txt`, `${base}-narracao.srt`);
-  }
+  // Arquivos que não se aplicam mais (narração ou legendas removidas) saem, para não sobrar
+  // roteiro/.srt de um render anterior ao lado do vídeo novo.
+  const narrationFiles = [`${base}-roteiro.txt`, `${base}-narracao.srt`];
+  if (tl.narration.length) {
+    if (tl.narration.length < short.narration.length) console.warn(`⚠ ${short.id}: ${short.narration.length - tl.narration.length} fala(s) fora do vídeo ou sobrepostas foram ignoradas.`);
+    fs.writeFileSync(narrationFiles[0], scriptText(plan, index));
+    fs.writeFileSync(narrationFiles[1], narrationSrt(plan, index));
+    files.push(...narrationFiles);
+  } else for (const f of narrationFiles) fs.rmSync(f, { force: true });
   if (tl.pages.length) {
     fs.writeFileSync(`${base}.srt`, srtFromPages(tl.pages));
     files.push(`${base}.srt`);
-  }
+  } else fs.rmSync(`${base}.srt`, { force: true });
   return files;
 }
 
@@ -95,9 +99,9 @@ export function coverFrame(hookWords: number, hasSub: boolean): number {
 }
 
 const clock = (t: number) => {
-  const m = Math.floor(t / 60);
-  const s = t - m * 60;
-  return `${String(m).padStart(2, "0")}:${s.toFixed(1).padStart(4, "0")}`;
+  const ds = Math.round(t * 10); // arredonda antes de separar: 59.96 vira 01:00.0, não 00:60.0
+  const m = Math.floor(ds / 600);
+  return `${String(m).padStart(2, "0")}:${((ds - m * 600) / 10).toFixed(1).padStart(4, "0")}`;
 };
 const wordCount = (t: string) => t.split(/\s+/).filter(Boolean).length;
 

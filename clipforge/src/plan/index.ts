@@ -102,11 +102,35 @@ export function savePlan(slug: string, plan: EditPlan) {
   fs.writeFileSync(file, JSON.stringify(plan, null, 2));
 }
 
-export function loadPlan(slug: string): EditPlan {
+type SourceShape = { duration: number; width: number; height: number };
+// Mesmo arquivo de trailer (resolução e duração iguais): um plano feito para um vale para o outro.
+export const sameSource = (a: SourceShape, b: SourceShape) => a.width === b.width && a.height === b.height && Math.abs(a.duration - b.duration) < 0.15;
+
+// Há um plano guardado (clipforge keep) feito para esta fonte?
+export function keptPlanFits(slug: string, source: SourceShape): boolean {
+  const kept = projectPath(slug, "plan.json");
+  if (!fs.existsSync(kept)) return false;
+  try {
+    const raw = JSON.parse(fs.readFileSync(kept, "utf8")) as { source?: SourceShape };
+    return !!raw.source && sameSource(raw.source, source);
+  } catch {
+    return false;
+  }
+}
+
+// anySource: restaura o plano guardado mesmo que a análise local seja de outro arquivo (swap-source).
+export function loadPlan(slug: string, opts: { anySource?: boolean } = {}): EditPlan {
   const file = workPath(slug, "plan.json");
   if (!fs.existsSync(file)) {
     const kept = projectPath(slug, "plan.json");
     if (!fs.existsSync(kept)) throw new Error(`Sem plano para "${slug}". Rode: clipforge plan ${slug}`);
+    const analysisFile = workPath(slug, "analysis.json");
+    if (!opts.anySource && fs.existsSync(analysisFile)) {
+      const { source } = JSON.parse(fs.readFileSync(analysisFile, "utf8")) as { source: SourceShape };
+      if (!keptPlanFits(slug, source)) {
+        throw new Error(`projects/${slug}/plan.json foi feito para outra versão do trailer. Para usar com o arquivo analisado: clipforge swap-source ${slug} <arquivo>`);
+      }
+    }
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.copyFileSync(kept, file);
     console.log(`• plano restaurado de projects/${slug}/plan.json`);

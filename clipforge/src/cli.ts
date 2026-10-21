@@ -6,7 +6,7 @@ import { Command } from "commander";
 import { analyze, loadAnalysis } from "./analyze/index";
 import { keepProject, swapSource } from "./analyze/swap";
 import { FORMATS, ROOT, slugFor, workPath, type FormatKey } from "./config";
-import { loadPlan, makePlan } from "./plan/index";
+import { keptPlanFits, loadPlan, makePlan } from "./plan/index";
 import { renderPlan, renderPreview, workSize } from "./render/render";
 import { ensureSfx } from "./render/sfx";
 
@@ -57,8 +57,9 @@ program
   .option("--format <lista>", "9x16,16x9", parseFormats, ["9x16", "16x9"] as FormatKey[])
   .option("--only <lista>", "só alguns shorts, ex.: 1,3", parseList)
   .option("-c, --concurrency <n>", "abas de render em paralelo", parsePositive("concurrency"))
-  .action(async (slug: string, o: { format: FormatKey[]; only?: number[]; concurrency?: number }) => {
-    await renderPlan(loadPlan(slug), { formats: o.format, only: o.only, concurrency: o.concurrency });
+  .option("--no-extras", "só os vídeos principais: sem a versão sem legenda e os stems da narração")
+  .action(async (slug: string, o: { format: FormatKey[]; only?: number[]; concurrency?: number; extras: boolean }) => {
+    await renderPlan(loadPlan(slug), { formats: o.format, only: o.only, concurrency: o.concurrency, extras: o.extras });
   });
 
 program
@@ -89,8 +90,9 @@ program
     const slug: string = o.slug ?? slugFor(trailer);
     const analysis = await analyze(trailer, slug, { force: o.reanalyze, reuse: !o.reanalyze });
     const hasPlan = fs.existsSync(workPath(slug, "plan.json"));
-    const plan =
-      hasPlan && !o.replan && !analysis.fresh
+    // Plano guardado em projects/<slug>/ para este mesmo trailer (ex.: sessão nova) também vale.
+    const reuse = !o.replan && (hasPlan ? !analysis.fresh : keptPlanFits(slug, analysis.source));
+    const plan = reuse
         ? (console.log("• plano: reaproveitando plan.json (use --replan para refazer)"), loadPlan(slug))
         : await makePlan(analysis, { heuristic: o.heuristic, game: o.game, count: o.count, sfx: o.sfx, subs: o.subs });
     const files = await renderPlan(plan, { formats: o.format, concurrency: o.concurrency });

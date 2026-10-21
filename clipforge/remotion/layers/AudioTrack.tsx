@@ -12,9 +12,10 @@ const FINAL_FADE = 1.2; // segundos de fade no fim (sob o card final)
 //   a volta à velocidade normal encaixa sem emenda (o impacto + whoosh cobrem a entrada);
 // - ganho com folga e "duck" sob os SFX, fade longo no final.
 // ducking=false: trilha "limpa" (stem para o usuário mixar com a própria voz no editor dele).
-export const AudioTrack: React.FC<{ tl: ResolvedTimeline; src: string; ducking?: boolean }> = ({ tl, src, ducking = true }) => {
+// sfx=false: sem SFX no plano, então nada de "duck" embaixo deles (só sob a narração).
+export const AudioTrack: React.FC<{ tl: ResolvedTimeline; src: string; ducking?: boolean; sfx?: boolean }> = ({ tl, src, ducking = true, sfx = true }) => {
   if (!src) return null;
-  const cues = ducking ? sfxCues(tl) : [];
+  const cues = ducking && sfx ? sfxCues(tl) : [];
   const voice = ducking ? tl.narration : [];
   const fps = tl.fps;
   const total = tl.durationInFrames;
