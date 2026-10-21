@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { energyEnvelope, findOffset, shiftPlan } from "../src/analyze/swap";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { energyEnvelope, findOffset, readEnvelope, shiftPlan, writeEnvelope } from "../src/analyze/swap";
 import { narrationGain, NARRATION_DUCK } from "../src/cues";
 import { narrationSrt, scriptText } from "../src/render/publish";
 import { EditPlanSchema } from "../src/schema";
@@ -71,6 +74,12 @@ test("alinhamento de áudio acha o deslocamento entre duas versões do trailer",
   const { offset, score } = findOffset(energyEnvelope(old, sr), energyEnvelope(shifted, sr), { maxShift: 3 });
   assert.ok(Math.abs(offset - -0.5) <= 0.011, `offset ${offset}`);
   assert.ok(score > 0.9);
+  // o envelope guardado em arquivo (arredondado a 0.1 dB) alinha igual
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cf-env-")), "env.json");
+  writeEnvelope(file, energyEnvelope(old, sr));
+  const again = findOffset(readEnvelope(file), energyEnvelope(shifted, sr), { maxShift: 3 });
+  assert.equal(again.offset, offset);
+  fs.rmSync(path.dirname(file), { recursive: true, force: true });
 });
 
 test("shiftPlan desloca segmentos e eventos, não a narração", () => {

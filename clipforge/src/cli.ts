@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Command } from "commander";
 import { analyze, loadAnalysis } from "./analyze/index";
-import { swapSource } from "./analyze/swap";
+import { keepProject, swapSource } from "./analyze/swap";
 import { FORMATS, ROOT, slugFor, workPath, type FormatKey } from "./config";
 import { loadPlan, makePlan } from "./plan/index";
 import { renderPlan, renderPreview, workSize } from "./render/render";
@@ -103,6 +103,14 @@ program
   .option("--refit", "refaz o enquadramento 9:16 pelo foco de cada shot (bom ao subir a resolução)")
   .action(async (slug: string, file: string, o: { refit?: boolean }) => {
     await swapSource(slug, file, o);
+  });
+
+program
+  .command("keep <slug>")
+  .description("Guarda o plano (e a assinatura do áudio, para swap-source) em projects/<slug>/ para versionar no git")
+  .action(async (slug: string) => {
+    const dir = await keepProject(slug);
+    console.log(`✓ guardado em ${path.relative(process.cwd(), dir) || "."}/ — faça commit para usar em outra máquina/sessão.`);
   });
 
 program

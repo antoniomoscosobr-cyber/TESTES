@@ -1,5 +1,6 @@
 import fs from "node:fs";
-import { workPath } from "../config";
+import path from "node:path";
+import { projectPath, workPath } from "../config";
 import { decodePcm } from "../ffmpeg";
 import { loadPlan, savePlan } from "../plan/index";
 import { splitByShots } from "../plan/snap";
@@ -54,6 +55,29 @@ export function findOffset(oldEnv: Float32Array, newEnv: Float32Array, opts: { f
   return { offset: best.lag * HOP, score: best.score };
 }
 
+// Envelope guardado junto do plano: alinha a troca de fonte mesmo sem o proxy antigo
+// (container novo, outra máquina). ~10 KB por minuto de trailer.
+export function writeEnvelope(file: string, env: Float32Array) {
+  fs.writeFileSync(file, JSON.stringify({ hop: HOP, sr: SR, db: Array.from(env, (v) => Math.round(v * 10) / 10) }));
+}
+
+export function readEnvelope(file: string): Float32Array {
+  const { hop, db } = JSON.parse(fs.readFileSync(file, "utf8")) as { hop: number; db: number[] };
+  if (hop !== HOP || !Array.isArray(db)) throw new Error(`${file}: envelope em formato inesperado.`);
+  return Float32Array.from(db);
+}
+
+// Guarda o plano e o envelope do áudio em projects/<slug>/ para versionar no git.
+export async function keepProject(slug: string): Promise<string> {
+  const plan = loadPlan(slug);
+  const dir = projectPath(slug);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "plan.json"), JSON.stringify(plan, null, 2));
+  const proxy = workPath(slug, "source.mp4");
+  if (fs.existsSync(proxy)) writeEnvelope(path.join(dir, "source-envelope.json"), energyEnvelope(await decodePcm(proxy, SR)));
+  return dir;
+}
+
 // Aplica os deslocamentos ao plano: cada segmento com o seu, e eventos (legendas, callouts,
 // splashes) com o do segmento mais próximo. A narração está no tempo do short e não muda.
 export function shiftPlan(plan: EditPlan, segOffsets: number[][]): EditPlan {
@@ -90,9 +114,12 @@ export function shiftPlan(plan: EditPlan, segOffsets: number[][]): EditPlan {
 export async function swapSource(slug: string, file: string, opts: { refit?: boolean } = {}): Promise<EditPlan> {
   const plan = loadPlan(slug);
   const oldProxy = workPath(slug, "source.mp4");
-  if (!fs.existsSync(oldProxy)) throw new Error(`Sem proxy antigo em ${oldProxy} para alinhar o áudio.`);
+  const kept = projectPath(slug, "source-envelope.json");
   // O envelope do áudio antigo fica em memória: o reingest a seguir apaga o proxy antigo.
-  const oldEnv = energyEnvelope(await decodePcm(oldProxy, SR));
+  let oldEnv: Float32Array;
+  if (fs.existsSync(oldProxy)) oldEnv = energyEnvelope(await decodePcm(oldProxy, SR));
+  else if (fs.existsSync(kept)) oldEnv = readEnvelope(kept);
+  else throw new Error(`Sem o proxy antigo (${oldProxy}) nem projects/${slug}/source-envelope.json para alinhar o áudio.`);
 
   const analysis: Analysis = await analyze(file, slug, { force: true });
   const newEnv = energyEnvelope(await decodePcm(workPath(slug, "source.mp4"), SR));
@@ -124,6 +151,7 @@ export async function swapSource(slug: string, file: string, opts: { refit?: boo
   if (opts.refit) shifted.shorts = shifted.shorts.map((s) => ({ ...s, segments: splitByShots(s.segments, analysis, true) }));
   const valid = EditPlanSchema.parse(shifted);
   savePlan(slug, valid);
+  if (fs.existsSync(projectPath(slug))) await keepProject(slug); // o guardado passa a apontar para a fonte nova
   console.log(`✓ plano agora usa ${analysis.source.width}x${analysis.source.height} (${file}).`);
   return valid;
 }

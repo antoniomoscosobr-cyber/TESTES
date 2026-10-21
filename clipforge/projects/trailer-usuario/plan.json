@@ -1,0 +1,604 @@
+{
+  "version": 1,
+  "slug": "trailer-usuario",
+  "game": "GTA 6",
+  "director": "claude",
+  "source": {
+    "file": "work/trailer-usuario/source.mp4",
+    "bgFile": "work/trailer-usuario/bg916.mp4",
+    "duration": 90.14,
+    "fps": 30,
+    "width": 640,
+    "height": 360
+  },
+  "beats": [
+    2.786,
+    3.297,
+    3.831,
+    4.342,
+    4.853,
+    5.387,
+    5.898,
+    6.409,
+    6.92,
+    7.454,
+    7.964,
+    8.475,
+    8.986,
+    9.497,
+    10.008,
+    10.519,
+    11.029,
+    11.54,
+    12.051,
+    12.562,
+    13.073,
+    13.584,
+    14.095,
+    14.605,
+    15.116,
+    15.65,
+    16.184,
+    16.695,
+    17.206,
+    17.717,
+    18.228,
+    18.762,
+    19.273,
+    19.783,
+    20.317,
+    20.828,
+    21.339,
+    21.85,
+    22.361,
+    22.872,
+    23.406,
+    23.917,
+    24.427,
+    24.938,
+    25.472,
+    25.983,
+    26.494,
+    27.005,
+    27.516,
+    28.026,
+    28.561,
+    29.071,
+    29.582,
+    30.093,
+    30.604,
+    31.115,
+    31.649,
+    32.16,
+    32.67,
+    33.181,
+    33.715,
+    34.226,
+    34.737,
+    35.248,
+    35.759,
+    36.293,
+    36.804,
+    37.314,
+    37.825,
+    38.336,
+    38.87,
+    39.381,
+    39.892,
+    40.403,
+    40.937,
+    41.448,
+    41.982,
+    42.493,
+    43.003,
+    43.514,
+    44.048,
+    44.559,
+    45.07,
+    45.581,
+    46.115,
+    46.626,
+    47.137,
+    47.647,
+    48.181,
+    48.692,
+    49.203,
+    49.714,
+    50.248,
+    50.759,
+    51.27,
+    51.78,
+    52.315,
+    52.825,
+    53.336,
+    53.847,
+    54.358,
+    54.869,
+    55.403,
+    55.914,
+    56.424,
+    56.935,
+    57.469,
+    57.98,
+    58.491,
+    59.002,
+    59.513,
+    60.047,
+    60.581,
+    61.092,
+    61.603,
+    62.113,
+    62.624,
+    63.158,
+    63.669,
+    64.18,
+    64.691,
+    65.225,
+    65.736,
+    66.247,
+    66.757,
+    67.268,
+    67.779,
+    68.29,
+    68.801,
+    69.312,
+    69.846,
+    70.356,
+    70.867,
+    71.378,
+    71.912,
+    72.423,
+    72.934,
+    73.445,
+    73.956,
+    74.49,
+    75,
+    75.511,
+    76.022,
+    76.579,
+    77.113,
+    77.624,
+    78.158,
+    78.669,
+    79.18,
+    79.691,
+    80.225,
+    80.736,
+    81.247,
+    81.757,
+    82.268,
+    82.779,
+    83.313,
+    83.824,
+    84.335,
+    84.846,
+    85.38,
+    85.891,
+    86.401,
+    86.912,
+    87.446,
+    87.957,
+    88.468,
+    88.979,
+    89.49,
+    90.001
+  ],
+  "sfx": true,
+  "shorts": [
+    {
+      "id": "short-01",
+      "title": "GTA 6: o trailer que quebrou a internet",
+      "description": "Falta menos de um mês pro GTA 6! Relembra o trailer que bateu recorde no YouTube e repara nos detalhes de Leonida. Qual parte você mais quer jogar?",
+      "hashtags": [
+        "#GTA6",
+        "#GTAVI",
+        "#GrandTheftAuto",
+        "#Rockstar",
+        "#ViceCity",
+        "#Games",
+        "#Shorts"
+      ],
+      "hook": {
+        "text": "FALTA MENOS DE 1 MÊS",
+        "sub": "pro GTA 6 chegar"
+      },
+      "segments": [
+        {
+          "srcStart": 39.8,
+          "srcEnd": 41.33,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 11,
+          "srcEnd": 12.7,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 18.37,
+          "srcEnd": 19.17,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 21.73,
+          "srcEnd": 23.27,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 23.27,
+          "srcEnd": 24.83,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 24.83,
+          "srcEnd": 26.6,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 32.57,
+          "srcEnd": 35.4,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 4.6,
+          "srcEnd": 6.53,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 7,
+          "srcEnd": 8.9,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 9.6,
+          "srcEnd": 10.93,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 19.17,
+          "srcEnd": 21.73,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 35.67,
+          "srcEnd": 37.47,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 30,
+          "srcEnd": 31.8,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 41.33,
+          "srcEnd": 43.9,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 43.9,
+          "srcEnd": 45.47,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 48.6,
+          "srcEnd": 50.4,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 53.97,
+          "srcEnd": 55.8,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 57.37,
+          "srcEnd": 59,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 63.57,
+          "srcEnd": 64.57,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 64.57,
+          "srcEnd": 65.67,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 65.67,
+          "srcEnd": 66.67,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 66.67,
+          "srcEnd": 67.67,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 60.47,
+          "srcEnd": 62.57,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 62.57,
+          "srcEnd": 63.57,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 68.67,
+          "srcEnd": 70.27,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 70.27,
+          "srcEnd": 72,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 72.87,
+          "srcEnd": 74.8,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 76.5,
+          "srcEnd": 78.4,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        },
+        {
+          "srcStart": 78.5,
+          "srcEnd": 84.5,
+          "speed": 1,
+          "focusX": 0.5,
+          "fit": "blur"
+        }
+      ],
+      "captions": [],
+      "narration": [
+        {
+          "start": 0.15,
+          "end": 2.85,
+          "text": "Relembra o trailer que parou o mundo.",
+          "emphasis": [
+            "trailer",
+            "mundo."
+          ]
+        },
+        {
+          "start": 3.38,
+          "end": 8.28,
+          "text": "Ele quebrou a internet: noventa milhões de views em vinte e quatro horas.",
+          "emphasis": [
+            "internet:",
+            "noventa",
+            "milhões"
+          ]
+        },
+        {
+          "start": 8.51,
+          "end": 11.51,
+          "text": "Recorde no Guinness, passando até o MrBeast.",
+          "emphasis": [
+            "Guinness,",
+            "MrBeast."
+          ]
+        },
+        {
+          "start": 11.88,
+          "end": 16.78,
+          "text": "Tudo começa com a Lucia, a nova protagonista, presa, dizendo que foi só azar.",
+          "emphasis": [
+            "Lucia,",
+            "azar."
+          ]
+        },
+        {
+          "start": 17.05,
+          "end": 22.55,
+          "text": "Bem-vindo a Leonida, a versão do GTA pra Flórida, com a Vice City de volta.",
+          "emphasis": [
+            "Leonida,",
+            "Vice",
+            "City"
+          ]
+        },
+        {
+          "start": 23.22,
+          "end": 27.92,
+          "text": "E esses vídeos de rede social? É pura zoeira com o meme do Florida Man.",
+          "emphasis": [
+            "Florida",
+            "Man."
+          ]
+        },
+        {
+          "start": 28.12,
+          "end": 32.32,
+          "text": "Jacaré na piscina, festa no posto em plena tempestade... caos total.",
+          "emphasis": [
+            "Jacaré",
+            "caos"
+          ]
+        },
+        {
+          "start": 32.62,
+          "end": 36.52,
+          "text": "Até o Weazel News voltou, cobrindo as doideiras da cidade.",
+          "emphasis": [
+            "Weazel",
+            "News"
+          ]
+        },
+        {
+          "start": 36.72,
+          "end": 40.32,
+          "text": "Lucia e Jason assaltando juntos, estilo Bonnie e Clyde.",
+          "emphasis": [
+            "Bonnie",
+            "Clyde."
+          ]
+        },
+        {
+          "start": 40.92,
+          "end": 44.72,
+          "text": "E a trilha? Love Is a Long Road, do Tom Petty.",
+          "emphasis": [
+            "Love",
+            "Petty."
+          ]
+        },
+        {
+          "start": 46.98,
+          "end": 49.88,
+          "text": "Dezenove de novembro, no PS5 e Xbox Series.",
+          "emphasis": [
+            "Dezenove",
+            "novembro,"
+          ]
+        },
+        {
+          "start": 50.36,
+          "end": 52.36,
+          "text": "Segue pra não perder nada!",
+          "emphasis": []
+        }
+      ],
+      "callouts": [
+        {
+          "srcTime": 22.666,
+          "duration": 1.6,
+          "text": "90 MILHÕES",
+          "style": "stamp"
+        },
+        {
+          "srcTime": 26.207,
+          "duration": 1.8,
+          "text": "RECORDE NO GUINNESS",
+          "style": "badge"
+        },
+        {
+          "srcTime": 45.338,
+          "duration": 1.5,
+          "text": "FLORIDA MAN",
+          "style": "glitch"
+        },
+        {
+          "srcTime": 63.195,
+          "duration": 1.6,
+          "text": "BONNIE & CLYDE",
+          "style": "stamp"
+        }
+      ],
+      "splashes": [
+        {
+          "srcTime": 11.006,
+          "kind": "impact",
+          "text": "",
+          "intensity": 0.7
+        },
+        {
+          "srcTime": 22.872,
+          "kind": "particles",
+          "text": "",
+          "intensity": 0.8
+        },
+        {
+          "srcTime": 19.67,
+          "kind": "title3d",
+          "text": "LEONIDA",
+          "intensity": 0.9
+        },
+        {
+          "srcTime": 64.18,
+          "kind": "shockwave",
+          "text": "",
+          "intensity": 0.8
+        },
+        {
+          "srcTime": 65.225,
+          "kind": "glitch",
+          "text": "",
+          "intensity": 0.8
+        },
+        {
+          "srcTime": 68.801,
+          "kind": "impact",
+          "text": "",
+          "intensity": 1
+        },
+        {
+          "srcTime": 70.356,
+          "kind": "particles",
+          "text": "",
+          "intensity": 0.9
+        },
+        {
+          "srcTime": 78.6,
+          "kind": "flash",
+          "text": "",
+          "intensity": 1
+        }
+      ],
+      "endCard": {
+        "title": "19 DE NOVEMBRO",
+        "subtitle": "PS5 • Xbox Series X|S",
+        "cta": "Segue pra não perder nada"
+      },
+      "accentColor": "#ff4fd8"
+    }
+  ]
+}

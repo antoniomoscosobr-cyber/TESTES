@@ -6,6 +6,7 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 export const PUBLIC_DIR = path.join(ROOT, "public");
 export const WORK_DIR = path.join(PUBLIC_DIR, "work");
 export const OUT_DIR = path.join(ROOT, "out");
+export const PROJECTS_DIR = path.join(ROOT, "projects"); // planos guardados no git (clipforge keep)
 export const WHISPER_DIR = path.join(ROOT, ".whisper");
 export const REMOTION_ENTRY = path.join(ROOT, "remotion", "index.ts");
 
@@ -33,6 +34,7 @@ export const FORMATS = {
 export type FormatKey = keyof typeof FORMATS;
 
 export const workPath = (slug: string, ...parts: string[]) => path.join(WORK_DIR, slug, ...parts);
+export const projectPath = (slug: string, ...parts: string[]) => path.join(PROJECTS_DIR, slug, ...parts);
 // Caminho relativo a public/, usado com staticFile() no Remotion.
 export const publicRel = (slug: string, ...parts: string[]) => ["work", slug, ...parts].join("/");
 

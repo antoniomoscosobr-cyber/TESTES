@@ -1,6 +1,7 @@
 import fs from "node:fs";
+import path from "node:path";
 import { parseSrt, parseVtt } from "@remotion/captions";
-import { gameNameFromFile, PRESET, workPath } from "../config";
+import { gameNameFromFile, PRESET, projectPath, workPath } from "../config";
 import { EditPlanSchema, type Analysis, type EditPlan, type Phrase } from "../schema";
 import { resolveTimeline, FPS } from "../timeline";
 import { findCandidates } from "./candidates";
@@ -103,7 +104,13 @@ export function savePlan(slug: string, plan: EditPlan) {
 
 export function loadPlan(slug: string): EditPlan {
   const file = workPath(slug, "plan.json");
-  if (!fs.existsSync(file)) throw new Error(`Sem plano para "${slug}". Rode: clipforge plan ${slug}`);
+  if (!fs.existsSync(file)) {
+    const kept = projectPath(slug, "plan.json");
+    if (!fs.existsSync(kept)) throw new Error(`Sem plano para "${slug}". Rode: clipforge plan ${slug}`);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.copyFileSync(kept, file);
+    console.log(`• plano restaurado de projects/${slug}/plan.json`);
+  }
   let raw: unknown;
   try {
     raw = JSON.parse(fs.readFileSync(file, "utf8"));

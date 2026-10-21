@@ -42,6 +42,23 @@ O `make` reaproveita a análise e o plano quando o trailer não mudou. `--reanal
 
 Para testar sem trailer: `npm run fixture` gera `fixtures/fixture-trailer.mp4`, um trailer sintético. `npm run studio` sem slug abre um plano de demonstração.
 
+## Short narrado com a sua voz
+
+Preencha `narration` no short do `plan.json`: falas com `start`/`end` **no tempo do short** (não do trailer), `text` e `emphasis`. As falas viram as legendas e o trailer abaixa ~7 dB embaixo de cada uma. O render entrega, além dos vídeos:
+
+- `short-01-roteiro.txt` (timecode, duração e ritmo de cada fala) e `short-01-narracao.srt`, para gravar
+- `short-01-9x16-sem-legenda.mp4`, caso o seu ritmo não bata com as legendas
+- `short-01-trilha.wav` (trailer cortado, sem ducking) e `short-01-sfx.wav`, para mixar a voz no seu editor
+
+Começou com um trailer em baixa e chegou o mesmo em 1080p? Troque a fonte sem refazer roteiro e cortes. O áudio dos dois é alinhado por correlação, mesmo que o reupload tenha cortes:
+
+```bash
+npm run clipforge -- swap-source meu-jogo ~/Downloads/trailer-1080p.mp4 --refit   # --refit: volta a enquadrar em tela cheia
+npm run clipforge -- keep meu-jogo   # guarda plano + assinatura do áudio em projects/meu-jogo/ (commit para usar em outra máquina)
+```
+
+Sem o trabalho local (`public/work/<slug>`), `render`/`swap-source` usam o que estiver em `projects/<slug>/`.
+
 ## Saída (`out/<slug>/`)
 
 | Arquivo | Conteúdo |
@@ -51,6 +68,7 @@ Para testar sem trailer: `npm run fixture` gera `fixtures/fixture-trailer.mp4`, 
 | `short-01.txt` | Título, descrição e hashtags prontos para colar no post |
 | `short-01.json` | Metadados: hook, duração, trechos do trailer usados |
 | `short-01.srt` | Legendas no tempo do short |
+| `short-01-roteiro.txt`, `-narracao.srt`, `-9x16-sem-legenda.mp4`, `-trilha.wav`, `-sfx.wav` | Só em shorts com `narration` (acima) |
 
 ## Etapas
 
