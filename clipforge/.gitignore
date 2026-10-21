@@ -5,3 +5,5 @@ public/work
 *.log
 fixtures
 public/sfx/*.wav
+# scripts de rascunho (verificações rápidas com tsx)
+/_*.mts
