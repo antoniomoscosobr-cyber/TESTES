@@ -13,7 +13,7 @@ import { VideoFx } from "../layers/VideoFx";
 import { VideoTrack } from "../layers/VideoTrack";
 import { Splashes3D } from "../three/Splashes3D";
 
-export const Short: React.FC<ShortProps> = ({ plan, shortIndex }) => {
+export const Short: React.FC<ShortProps> = ({ plan, shortIndex, hideCaptions, audioMode = "mix" }) => {
   useFonts();
   const short = plan ? (plan.shorts[shortIndex] ?? plan.shorts[0]) : undefined;
   const tl = useMemo(() => (short ? resolveTimeline(short, FPS, plan?.beats ?? []) : null), [short, plan?.beats]);
@@ -26,15 +26,15 @@ export const Short: React.FC<ShortProps> = ({ plan, shortIndex }) => {
       <VideoFx tl={tl}>
         <VideoTrack tl={tl} src={plan.source.file} bgSrc={plan.source.bgFile} srcWidth={plan.source.width} srcHeight={plan.source.height} />
       </VideoFx>
-      <AudioTrack tl={tl} src={plan.source.file} />
+      {audioMode !== "sfx" ? <AudioTrack tl={tl} src={plan.source.file} ducking={audioMode === "mix"} /> : null}
       <FlashLayer tl={tl} accent={accent} />
       <Splashes3D tl={tl} accent={accent} />
-      <Captions pages={tl.pages} accent={accent} />
+      {hideCaptions ? null : <Captions pages={tl.pages} accent={accent} />}
       <Callouts items={tl.callouts} accent={accent} />
       <HookTitle text={short.hook.text} sub={short.hook.sub} accent={accent} />
       <EndCard title={short.endCard.title} subtitle={short.endCard.subtitle} cta={short.endCard.cta} accent={accent} totalFrames={tl.durationInFrames} />
       <ProgressBar accent={accent} totalFrames={tl.durationInFrames} />
-      {plan.sfx ? <SfxTrack tl={tl} /> : null}
+      {plan.sfx && audioMode !== "bed" ? <SfxTrack tl={tl} /> : null}
     </AbsoluteFill>
   );
 };

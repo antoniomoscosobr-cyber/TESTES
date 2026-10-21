@@ -70,6 +70,44 @@ function linkTree(src: string, dest: string) {
   for (const f of fs.readdirSync(src)) linkOrCopy(path.join(src, f), path.join(dest, f));
 }
 
+type Job = {
+  label: string;
+  compositionId: string;
+  props: Pick<ShortProps, "hideCaptions" | "audioMode">;
+  output: string;
+  kind: "video" | "audio";
+  cover?: string;
+};
+
+// Lista do que renderizar por short. Shorts narrados ganham também a versão 9:16 sem legenda
+// (para quando o ritmo da voz não bater com as legendas) e os stems de áudio para mixar a voz.
+function jobsFor(plan: EditPlan, i: number, formats: FormatKey[], outDir: string): Job[] {
+  const short = plan.shorts[i];
+  const jobs: Job[] = formats.map((fmt) => ({
+    label: `${short.id} ${fmt}`,
+    compositionId: FORMATS[fmt].id,
+    props: { hideCaptions: false, audioMode: "mix" },
+    output: path.join(outDir, `${short.id}-${fmt}.mp4`),
+    kind: "video",
+    cover: path.join(outDir, `${short.id}-${fmt}-cover.jpg`),
+  }));
+  if (short.narration.length) {
+    const fmt: FormatKey = formats.includes("9x16") ? "9x16" : formats[0];
+    jobs.push({
+      label: `${short.id} ${fmt} sem legenda`,
+      compositionId: FORMATS[fmt].id,
+      props: { hideCaptions: true, audioMode: "mix" },
+      output: path.join(outDir, `${short.id}-${fmt}-sem-legenda.mp4`),
+      kind: "video",
+    });
+    jobs.push({ label: `${short.id} trilha`, compositionId: FORMATS[fmt].id, props: { hideCaptions: true, audioMode: "bed" }, output: path.join(outDir, `${short.id}-trilha.wav`), kind: "audio" });
+    if (plan.sfx) {
+      jobs.push({ label: `${short.id} sfx`, compositionId: FORMATS[fmt].id, props: { hideCaptions: true, audioMode: "sfx" }, output: path.join(outDir, `${short.id}-sfx.wav`), kind: "audio" });
+    }
+  }
+  return jobs;
+}
+
 export async function renderPlan(plan: EditPlan, opts: RenderOptions): Promise<string[]> {
   const outDir = path.join(OUT_DIR, plan.slug);
   fs.mkdirSync(outDir, { recursive: true });
@@ -80,24 +118,20 @@ export async function renderPlan(plan: EditPlan, opts: RenderOptions): Promise<s
     for (const [i, short] of plan.shorts.entries()) {
       if (opts.only?.length && !opts.only.includes(i + 1)) continue;
       writeSidecars(plan, i, outDir);
-      for (const fmt of opts.formats) {
-        const { id } = FORMATS[fmt];
-        const inputProps: ShortProps = { plan, slug: "", shortIndex: i };
-        const outputLocation = path.join(outDir, `${short.id}-${fmt}.mp4`);
+      for (const job of jobsFor(plan, i, opts.formats, outDir)) {
+        const inputProps: ShortProps = { plan, slug: "", shortIndex: i, ...job.props };
         const t0 = Date.now();
         let lastPct = -10;
         try {
-          const composition = await selectComposition({ serveUrl, id, inputProps, browserExecutable, chromiumOptions });
+          const composition = await selectComposition({ serveUrl, id: job.compositionId, inputProps, browserExecutable, chromiumOptions });
           await renderMedia({
             composition,
             serveUrl,
-            codec: "h264",
-            crf: 18,
-            imageFormat: "jpeg",
-            jpegQuality: 92,
-            colorSpace: "bt709",
+            ...(job.kind === "video"
+              ? { codec: "h264" as const, crf: 18, imageFormat: "jpeg" as const, jpegQuality: 92, colorSpace: "bt709" as const }
+              : { codec: "wav" as const }),
             inputProps,
-            outputLocation,
+            outputLocation: job.output,
             browserExecutable,
             chromiumOptions,
             concurrency: opts.concurrency ?? null,
@@ -106,32 +140,33 @@ export async function renderPlan(plan: EditPlan, opts: RenderOptions): Promise<s
               const pct = Math.floor(progress * 100);
               if (pct >= lastPct + 10) {
                 lastPct = pct;
-                process.stdout.write(`\r  ${short.id} ${fmt}: ${pct}%   `);
+                process.stdout.write(`\r  ${job.label}: ${pct}%   `);
               }
             },
           });
-          await normalizeLoudness(outputLocation);
-          // Capa (JPEG) no frame em que o hook está completo.
-          const cover = path.join(outDir, `${short.id}-${fmt}-cover.jpg`);
-          await renderStill({
-            composition,
-            serveUrl,
-            frame: Math.min(composition.durationInFrames - 1, coverFrame(short.hook.text.split(/\s+/).length, !!short.hook.sub)),
-            output: cover,
-            imageFormat: "jpeg",
-            jpegQuality: 90,
-            inputProps,
-            browserExecutable,
-            chromiumOptions,
-          });
+          // Stems saem crus (o usuário mixa); os MP4 são normalizados para as plataformas.
+          if (job.kind === "video") await normalizeLoudness(job.output);
+          if (job.cover) {
+            await renderStill({
+              composition,
+              serveUrl,
+              frame: Math.min(composition.durationInFrames - 1, coverFrame(short.hook.text.split(/\s+/).length, !!short.hook.sub)),
+              output: job.cover,
+              imageFormat: "jpeg",
+              jpegQuality: 90,
+              inputProps,
+              browserExecutable,
+              chromiumOptions,
+            });
+          }
           const secs = ((Date.now() - t0) / 1000).toFixed(0);
-          process.stdout.write(`\r  ✓ ${short.id} ${fmt} (${(composition.durationInFrames / composition.fps).toFixed(1)}s) em ${secs}s → ${outputLocation}\n`);
-          outputs.push(outputLocation);
+          process.stdout.write(`\r  ✓ ${job.label} (${(composition.durationInFrames / composition.fps).toFixed(1)}s) em ${secs}s → ${job.output}\n`);
+          outputs.push(job.output);
         } catch (err) {
-          // Um short com problema não derruba os outros; o resumo no fim lista as falhas.
+          // Um render com problema não derruba os outros; o resumo no fim lista as falhas.
           process.stdout.write("\n");
-          console.error(`✗ ${short.id} ${fmt}: ${(err as Error).message.split("\n")[0]}`);
-          failures.push(`${short.id} ${fmt}`);
+          console.error(`✗ ${job.label}: ${(err as Error).message.split("\n")[0]}`);
+          failures.push(job.label);
         }
       }
     }
@@ -148,7 +183,7 @@ export async function renderPlan(plan: EditPlan, opts: RenderOptions): Promise<s
 export async function renderPreview(plan: EditPlan, opts: { short: number; format: FormatKey; at: number[] }): Promise<string[]> {
   const short = plan.shorts[opts.short - 1];
   if (!short) throw new Error(`Short ${opts.short} não existe (o plano tem ${plan.shorts.length}).`);
-  const inputProps: ShortProps = { plan, slug: "", shortIndex: opts.short - 1 };
+  const inputProps: ShortProps = { plan, slug: "", shortIndex: opts.short - 1, hideCaptions: false, audioMode: "mix" };
   const dir = path.join(OUT_DIR, plan.slug, "preview");
   fs.mkdirSync(dir, { recursive: true });
   return withBundle(plan, async ({ serveUrl, browserExecutable, chromiumOptions }) => {

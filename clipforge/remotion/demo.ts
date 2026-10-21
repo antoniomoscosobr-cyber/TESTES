@@ -27,6 +27,7 @@ export const demoPlan: EditPlan = {
         { srcStart: 14.5, srcEnd: 18, text: "e só você pode decidir o que vem depois", emphasis: ["você"] },
         { srcStart: 19, srcEnd: 23, text: "Prepare-se para a inacreditável batalha final!", emphasis: ["inacreditável", "final"] },
       ],
+      narration: [],
       callouts: [
         { srcTime: 15.5, duration: 1.2, text: "OLHA ISSO", style: "badge" },
         { srcTime: 20, duration: 1.2, text: "BRUTAL", style: "stamp" },

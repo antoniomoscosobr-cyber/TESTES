@@ -32,6 +32,7 @@ export type ResolvedTimeline = {
   durationInFrames: number;
   duration: number;
   endCardStart: number;
+  narration: { start: number; end: number; text: string }[]; // falas da narração (tempo do short)
   beats: number[]; // beats da música no tempo do short (para o pulso de câmera)
   segments: ResolvedSegment[];
   pages: CaptionPage[];
@@ -98,6 +99,12 @@ export function resolveTimeline(short: Short, fps: number, sourceBeats: number[]
   };
 
   // ---- Legendas ----
+  const narration = short.narration
+    .filter((n) => n.end > n.start && n.text.trim())
+    .map((n) => ({ start: Math.max(0, n.start), end: Math.min(duration, n.end), text: n.text.trim(), emphasis: n.emphasis }))
+    .filter((n) => n.end > n.start)
+    .sort((a, b) => a.start - b.start);
+  const underNarration = (a: number, b: number) => narration.some((n) => a < n.end && b > n.start);
   const lines: TimedWord[][] = [];
   for (const line of short.captions) {
     const words = sourceWords(line);
@@ -112,14 +119,19 @@ export function resolveTimeline(short: Short, fps: number, sourceBeats: number[]
     }
     if (!best || best.chars / totalChars < MIN_LINE_COVERAGE) continue;
     const { run } = best;
-    lines.push(
-      best.kept.map((w) => ({
-        text: w.text,
-        start: mapInRun(run, Math.max(w.start, run.srcStart)),
-        end: mapInRun(run, Math.min(w.end, run.srcEnd)),
-        emphasis: w.emphasis,
-      })),
-    );
+    const mapped = best.kept.map((w) => ({
+      text: w.text,
+      start: mapInRun(run, Math.max(w.start, run.srcStart)),
+      end: mapInRun(run, Math.min(w.end, run.srcEnd)),
+      emphasis: w.emphasis,
+    }));
+    // A narração tem prioridade: fala original por baixo dela não vira legenda.
+    if (!underNarration(mapped[0].start, mapped[mapped.length - 1].end)) lines.push(mapped);
+  }
+  // Narração: já está no tempo do short; palavras distribuídas pela duração de cada fala.
+  for (const n of narration) {
+    const words = sourceWords({ srcStart: n.start, srcEnd: n.end, text: n.text, emphasis: n.emphasis });
+    if (words.length) lines.push(words);
   }
   lines.sort((x, y) => x[0].start - y[0].start);
   // Frases sobrepostas: a seguinte espera a anterior terminar (comprimida no tempo que sobra).
@@ -176,7 +188,18 @@ export function resolveTimeline(short: Short, fps: number, sourceBeats: number[]
     .sort((x, y) => x - y)
     .filter((t, i, arr) => i === 0 || t - arr[i - 1] > 0.2);
 
-  return { fps, durationInFrames: frame, duration, endCardStart, beats, segments, pages, callouts: freeCallouts, splashes };
+  return {
+    fps,
+    durationInFrames: frame,
+    duration,
+    endCardStart,
+    narration: narration.map(({ start, end, text }) => ({ start, end, text })),
+    beats,
+    segments,
+    pages,
+    callouts: freeCallouts,
+    splashes,
+  };
 }
 
 const normalize = (w: string) =>

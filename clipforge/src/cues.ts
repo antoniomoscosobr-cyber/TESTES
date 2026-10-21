@@ -45,3 +45,15 @@ export function duckGain(t: number, cues: SfxCue[]): number {
   }
   return g;
 }
+
+// Sob a narração o trailer abaixa ~7 dB (rampas de 150 ms) para a voz caber por cima.
+export const NARRATION_DUCK = 0.45;
+export function narrationGain(t: number, windows: { start: number; end: number }[], ramp = 0.15): number {
+  let g = 1;
+  for (const w of windows) {
+    if (t < w.start - ramp || t > w.end + ramp) continue;
+    const k = t < w.start ? (t - (w.start - ramp)) / ramp : t > w.end ? 1 - (t - w.end) / ramp : 1;
+    g = Math.min(g, 1 - (1 - NARRATION_DUCK) * Math.max(0, Math.min(1, k)));
+  }
+  return g;
+}

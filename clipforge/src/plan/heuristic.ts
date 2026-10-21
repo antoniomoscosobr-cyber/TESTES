@@ -88,6 +88,7 @@ export function heuristicShorts(a: Analysis, candidates: Candidate[], game: stri
       hook,
       segments,
       captions,
+      narration: [],
       callouts: spaced.slice(2, 4).map((o, i) => ({
         srcTime: o.t,
         duration: 1.2,

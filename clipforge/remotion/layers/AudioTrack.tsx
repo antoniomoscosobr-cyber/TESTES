@@ -1,6 +1,6 @@
 import React from "react";
 import { Html5Audio, Sequence, staticFile } from "remotion";
-import { duckGain, sfxCues, TRAILER_GAIN } from "../../src/cues";
+import { duckGain, narrationGain, sfxCues, TRAILER_GAIN } from "../../src/cues";
 import type { ResolvedTimeline } from "../../src/timeline";
 
 const XFADE = 4; // frames de cruzamento nos cortes com salto
@@ -11,9 +11,11 @@ const FINAL_FADE = 1.2; // segundos de fade no fim (sob o card final)
 // - câmera lenta não estica o som: toca a 1x o trecho que TERMINA no fim do segmento, então
 //   a volta à velocidade normal encaixa sem emenda (o impacto + whoosh cobrem a entrada);
 // - ganho com folga e "duck" sob os SFX, fade longo no final.
-export const AudioTrack: React.FC<{ tl: ResolvedTimeline; src: string }> = ({ tl, src }) => {
+// ducking=false: trilha "limpa" (stem para o usuário mixar com a própria voz no editor dele).
+export const AudioTrack: React.FC<{ tl: ResolvedTimeline; src: string; ducking?: boolean }> = ({ tl, src, ducking = true }) => {
   if (!src) return null;
-  const cues = sfxCues(tl);
+  const cues = ducking ? sfxCues(tl) : [];
+  const voice = ducking ? tl.narration : [];
   const fps = tl.fps;
   const total = tl.durationInFrames;
   const slow = (i: number) => !!tl.segments[i] && tl.segments[i].speed !== 1;
@@ -33,7 +35,7 @@ export const AudioTrack: React.FC<{ tl: ResolvedTimeline; src: string }> = ({ tl
           if (tail && f >= seg.durationInFrames) v *= Math.cos((Math.PI / 2) * Math.min(1, (f - seg.durationInFrames) / XFADE));
           const abs = (seg.from + f) / fps;
           if (abs > tl.duration - FINAL_FADE) v *= Math.max(0, Math.min(1, (tl.duration - abs) / FINAL_FADE));
-          return v * duckGain(abs, cues);
+          return v * duckGain(abs, cues) * narrationGain(abs, voice);
         };
         return (
           <Sequence key={i} from={seg.from} durationInFrames={dur} name={`áudio ${i + 1}${slow(i) ? " (1x)" : ""}`} layout="none">

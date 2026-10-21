@@ -208,6 +208,7 @@ export function mapDirectorOutput(
         hook: { text: hookWords.slice(0, 7).join(" "), sub: s.hook.sub.trim() },
         segments,
         captions: s.captions.filter((c) => c.text.trim() && c.srcEnd > c.srcStart),
+        narration: [],
         callouts: s.callouts
           .filter((c) => c.text.trim())
           .map((c) => ({ ...c, duration: clamp(c.duration || 1.2, 0.4, 2.5), style: toStyle(c.style) })),

@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Command } from "commander";
 import { analyze, loadAnalysis } from "./analyze/index";
+import { swapSource } from "./analyze/swap";
 import { FORMATS, ROOT, slugFor, workPath, type FormatKey } from "./config";
 import { loadPlan, makePlan } from "./plan/index";
 import { renderPlan, renderPreview, workSize } from "./render/render";
@@ -94,6 +95,14 @@ program
         : await makePlan(analysis, { heuristic: o.heuristic, game: o.game, count: o.count, sfx: o.sfx, subs: o.subs });
     const files = await renderPlan(plan, { formats: o.format, concurrency: o.concurrency });
     console.log(`\n✓ ${files.length} vídeos prontos em ${path.relative(process.cwd(), path.join(ROOT, "out", slug)) || "."}/`);
+  });
+
+program
+  .command("swap-source <slug> <arquivo>")
+  .description("Troca o vídeo de um plano pronto (ex.: 360p → 1080p do mesmo trailer) mantendo roteiro e cortes")
+  .option("--refit", "refaz o enquadramento 9:16 pelo foco de cada shot (bom ao subir a resolução)")
+  .action(async (slug: string, file: string, o: { refit?: boolean }) => {
+    await swapSource(slug, file, o);
   });
 
 program

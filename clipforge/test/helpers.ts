@@ -48,6 +48,7 @@ export function fakeShort(over: Partial<Short> = {}): Short {
     hook: { text: "HOOK", sub: "" },
     segments: [{ srcStart: 10, srcEnd: 20, speed: 1, focusX: 0.5, fit: "crop" }],
     captions: [],
+    narration: [],
     callouts: [],
     splashes: [],
     endCard: { title: "GAME", subtitle: "", cta: "cta" },

@@ -119,6 +119,16 @@ export const SplashSchema = z.object({
 });
 export type Splash = z.infer<typeof SplashSchema>;
 
+// Narração gravada pelo usuário (ou TTS), em segundos do SHORT final — não da fonte.
+// Vira legenda, roteiro com timecode e janelas em que o som do trailer abaixa para a voz.
+export const NarrationLineSchema = z.object({
+  start: z.number().min(0),
+  end: z.number(),
+  text: z.string(),
+  emphasis: z.array(z.string()).default([]),
+});
+export type NarrationLine = z.infer<typeof NarrationLineSchema>;
+
 export const ShortSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -127,6 +137,7 @@ export const ShortSchema = z.object({
   hook: z.object({ text: z.string(), sub: z.string().default("") }),
   segments: z.array(SegmentSchema).min(1),
   captions: z.array(CaptionLineSchema).default([]),
+  narration: z.array(NarrationLineSchema).default([]),
   callouts: z.array(CalloutSchema).default([]),
   splashes: z.array(SplashSchema).default([]),
   endCard: z.object({
@@ -164,5 +175,8 @@ export const ShortPropsSchema = z.object({
   plan: EditPlanSchema.optional(),
   slug: z.string().default(""),
   shortIndex: z.number().int().min(0),
+  // Variantes de entrega: sem legendas queimadas e stems de áudio (trilha / só SFX / sem áudio).
+  hideCaptions: z.boolean().default(false),
+  audioMode: z.enum(["mix", "bed", "sfx"]).default("mix"),
 });
 export type ShortProps = z.infer<typeof ShortPropsSchema>;

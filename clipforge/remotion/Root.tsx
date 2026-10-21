@@ -17,7 +17,7 @@ const calculateMetadata: CalculateMetadataFunction<ShortProps> = async ({ props,
   return { durationInFrames: Math.max(1, resolveTimeline(short, FPS).durationInFrames), fps: FPS, props: { ...props, plan } };
 };
 
-const defaultProps: ShortProps = { plan: demoPlan, slug: "", shortIndex: 0 };
+const defaultProps: ShortProps = { plan: demoPlan, slug: "", shortIndex: 0, hideCaptions: false, audioMode: "mix" };
 
 export const Root: React.FC = () => (
   <>
