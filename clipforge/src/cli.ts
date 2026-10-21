@@ -6,7 +6,7 @@ import { Command } from "commander";
 import { analyze, loadAnalysis } from "./analyze/index";
 import { FORMATS, ROOT, slugFor, workPath, type FormatKey } from "./config";
 import { loadPlan, makePlan } from "./plan/index";
-import { renderPlan, renderPreview } from "./render/render";
+import { renderPlan, renderPreview, workSize } from "./render/render";
 import { ensureSfx } from "./render/sfx";
 
 const program = new Command()
@@ -115,6 +115,27 @@ program
       child.on("error", reject);
       child.on("exit", (code) => (code === 0 || code === null ? resolve() : reject(new Error(`remotion studio saiu com código ${code}`))));
     });
+  });
+
+program
+  .command("clean [slug]")
+  .description("Apaga a pasta de trabalho de um trailer (proxy, análise, planos) — ou lista o espaço usado")
+  .option("--all", "apaga todas")
+  .action((slug: string | undefined, o: { all?: boolean }) => {
+    const root = path.join(ROOT, "public", "work");
+    const slugs = fs.existsSync(root) ? fs.readdirSync(root) : [];
+    const mb = (n: number) => `${(n / 1e6).toFixed(0)} MB`;
+    if (!slug && !o.all) {
+      for (const s of slugs) console.log(`  ${s}: ${mb(workSize(s))}`);
+      console.log("Use: clipforge clean <slug>  ou  clipforge clean --all");
+      return;
+    }
+    for (const s of o.all ? slugs : [slug!]) {
+      if (!slugs.includes(s)) throw new Error(`"${s}" não existe em public/work`);
+      const size = workSize(s);
+      fs.rmSync(workPath(s), { recursive: true, force: true });
+      console.log(`✓ ${s} apagado (${mb(size)})`);
+    }
   });
 
 program.parseAsync().catch((err: Error) => {

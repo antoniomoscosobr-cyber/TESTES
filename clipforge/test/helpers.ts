@@ -14,7 +14,7 @@ export function fakeAnalysis(over: Partial<Analysis> = {}): Analysis {
   return {
     version: 1,
     slug: "fake",
-    pipeline: 2,
+    pipeline: 3,
     sourceName: "fake.mp4",
     source: { file: "work/fake/source.mp4", bgFile: "", duration: 60, fps: 30, width: 1920, height: 1080, hasAudio: true, crop: null },
     shots,

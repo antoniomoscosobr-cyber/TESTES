@@ -13,6 +13,7 @@ export type Candidate = {
     peak: number;
     speech: number;
     black: number;
+    cards: number;
   };
 };
 
@@ -30,7 +31,8 @@ export function findCandidates(
   const count = opts.count ?? 12;
   const shots = a.shots;
   const strongImpacts = a.audio.onsets.filter((o) => o.strength >= 0.35);
-  const phrases = a.transcript?.phrases ?? [];
+  // Sem transcrição, os trechos estimados de voz valem como fala (diálogo costuma ser bom gancho).
+  const speechRanges = a.transcript?.phrases.length ? a.transcript.phrases : a.speech;
 
   // Densidade máxima de impactos em qualquer janela de 10s, para normalizar.
   let maxImpactDensity = 1e-6;
@@ -63,11 +65,12 @@ export function findCandidates(
         1,
         strongImpacts.filter((o) => o.t >= start && o.t < end).reduce((acc, o) => acc + o.strength, 0) / dur / maxImpactDensity,
       );
-      const speech = Math.min(1, phrases.reduce((acc, p) => acc + overlap(start, end, p.start, p.end), 0) / dur);
+      const speech = Math.min(1, speechRanges.reduce((acc, p) => acc + overlap(start, end, p.start, p.end), 0) / dur);
       const black = Math.min(1, a.black.reduce((acc, b) => acc + overlap(start, end, b.start, b.end), 0) / dur);
+      const cards = Math.min(1, a.cards.reduce((acc, b) => acc + overlap(start, end, b.start, b.end), 0) / dur);
       const durFit = Math.exp(-0.5 * Math.pow((dur - target) / 10, 2));
       const score =
-        0.28 * energy + 0.18 * motion + 0.14 * cutDensity + 0.16 * impacts + 0.1 * peak + 0.08 * speech + 0.06 * durFit - 0.8 * black;
+        0.28 * energy + 0.18 * motion + 0.14 * cutDensity + 0.16 * impacts + 0.1 * peak + 0.08 * speech + 0.06 * durFit - 0.8 * black - 0.6 * cards;
       all.push({
         start,
         end,
@@ -80,6 +83,7 @@ export function findCandidates(
           peak: round(peak),
           speech: round(speech),
           black: round(black),
+          cards: round(cards),
         },
       });
     }
@@ -98,7 +102,7 @@ export function findCandidates(
       start: 0,
       end: a.source.duration,
       score: 0,
-      features: { energy: 0, motion: 0, cutDensity: 0, impacts: 0, peak: 0, speech: 0, black: 0 },
+      features: { energy: 0, motion: 0, cutDensity: 0, impacts: 0, peak: 0, speech: 0, black: 0, cards: 0 },
     });
   }
   return picked;

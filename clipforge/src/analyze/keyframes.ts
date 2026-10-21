@@ -26,20 +26,26 @@ export async function extractKeyframes(
   for (const f of fs.readdirSync(dir)) fs.rmSync(path.join(dir, f));
   if (picks.length === 0) return { keyframes: [], sheets: [] };
 
-  // Uma passada só: seleciona os frames pelo número (proxy é CFR).
-  const frames = picks.map((p) => Math.round(p.t * FPS));
+  // Uma passada só: seleciona os frames pelo número (proxy é CFR). O showinfo diz o tempo de cada
+  // imagem gerada — o mapeamento imagem→shot não depende de o ffmpeg achar todos os frames.
+  const frames = [...new Set(picks.map((p) => Math.round(p.t * FPS)))].sort((x, y) => x - y);
   const expr = frames.map((n) => `eq(n\\,${n})`).join("+");
-  await ffmpeg([
+  const { stderr } = await ffmpeg([
     "-i", proxy,
     "-an",
-    "-vf", `select='${expr}',scale=${PRESET.keyframeWidth}:-2`,
+    "-vf", `select='${expr}',scale=${PRESET.keyframeWidth}:-2,showinfo`,
     "-fps_mode", "vfr",
     "-start_number", "0",
     "-q:v", "3",
     path.join(dir, "kf_%03d.jpg"),
   ]);
+  const times = [...stderr.matchAll(/Parsed_showinfo.*?pts_time:\s*([\d.]+)/g)].map((m) => Number(m[1]));
   const files = fs.readdirSync(dir).filter((f) => f.startsWith("kf_")).sort();
-  const keyframes: Keyframe[] = picks.slice(0, files.length).map((p, i) => ({ ...p, file: files[i] }));
+  const keyframes: Keyframe[] = files.map((file, i) => {
+    const t = times[i] ?? picks[Math.min(i, picks.length - 1)].t;
+    const pick = picks.reduce((a, b) => (Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a));
+    return { index: i, shot: pick.shot, t: Math.round(t * 1000) / 1000, file };
+  });
 
   // Contact sheets 4x4 com o índice do keyframe desenhado em cada célula.
   const font = await findFont();

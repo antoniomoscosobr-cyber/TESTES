@@ -8,9 +8,10 @@ import { ingest } from "./ingest";
 import { chooseKeyframes, extractKeyframes } from "./keyframes";
 import { buildShots, detectScenes, findCuts, meanScore } from "./scenes";
 import { transcribeAudio } from "./transcribe";
+import { analyzeShotVisual, decodeGray, detectCards, splitLongShots } from "./visual";
 
 // Sobe quando a análise muda de formato/conteúdo: análises antigas são refeitas no `make`.
-export const PIPELINE_VERSION = 2;
+export const PIPELINE_VERSION = 3;
 
 export type AnalyzeOptions = { force?: boolean; reuse?: boolean };
 
@@ -28,22 +29,36 @@ export async function analyze(input: string, slug: string, opts: AnalyzeOptions 
   console.log("• análise: cenas e telas pretas…");
   const scenes = await detectScenes(proxy, workPath(slug, "scene-scores.txt"));
   const cuts = findCuts(scenes.scores, PRESET.sceneThreshold, PRESET.minShotSeconds);
-  const rawShots = buildShots(cuts, info.duration);
 
-  console.log("• análise: áudio (energia, onsets, BPM)…");
+  console.log("• análise: áudio (energia, onsets, BPM, voz)…");
   const audio = info.hasAudio ? analyzeAudio(await decodePcm(proxy, AUDIO_SR)) : null;
+  // Takes longos viram sub-shots (cortados nos impactos) para gerar candidatos e keyframes.
+  // Bordas de tela preta também são cortes (fade para preto não dispara o scene score).
+  const allCuts = mergeCuts([...cuts, ...scenes.black.flatMap((b) => [b.start, b.end])], PRESET.minShotSeconds, info.duration);
+  const rawShots = splitLongShots(buildShots(allCuts, info.duration), audio?.onsets ?? []);
 
   const motions = rawShots.map((s) => meanScore(scenes.scores, s.start, s.end));
   const motionRef = percentile(motions, 0.95) || 1;
+  console.log("• análise: foco da ação por shot e cartelas…");
+  const gray = await decodeGray(proxy, info.width, info.height);
+  const cropFraction = 9 / 16 / (info.width / info.height);
+  const visuals = rawShots.map((s) => analyzeShotVisual(gray, s.start, s.end, cropFraction));
   const shots = rawShots.map((s, i) => ({
     start: r3(s.start),
     end: r3(s.end),
     motion: r3(Math.min(1, motions[i] / motionRef)),
     energy: r3(audio ? curveMean(audio.raw.energy, s.start, s.end) : 0),
-    focusX: 0.5,
-    focusConfidence: 0,
-    virtual: false,
+    focusX: visuals[i].focusX,
+    focusConfidence: visuals[i].focusConfidence,
+    virtual: s.virtual,
   }));
+  const firstStrong = audio?.onsets.find((o) => o.strength >= 0.5)?.t ?? null;
+  const { cards, logoShot } = detectCards(
+    shots.map((s, i) => ({ ...s, centeredness: visuals[i].centeredness, detail: visuals[i].detail })),
+    info.duration,
+    scenes.black,
+    firstStrong,
+  );
 
   console.log(`• análise: ${shots.length} shots, keyframes e contact sheets…`);
   const picks = chooseKeyframes(shots);
@@ -71,6 +86,8 @@ export async function analyze(input: string, slug: string, opts: AnalyzeOptions 
     },
     shots,
     black: scenes.black,
+    cards,
+    logoShot,
     audio: audio
       ? {
           hop: audio.hop,
@@ -96,6 +113,15 @@ export async function analyze(input: string, slug: string, opts: AnalyzeOptions 
       `${analysis.audio.onsets.length} impactos, ${bpm}, fala: ${transcript ? transcript.phrases.length + " frases" : transcriptStatus === "unavailable" ? `não transcrita (${analysis.speech.length} trechos com voz estimados)` : "não"}`,
   );
   return { ...analysis, fresh: true };
+}
+
+export function mergeCuts(cuts: number[], minGap: number, duration: number): number[] {
+  const out: number[] = [];
+  for (const c of [...cuts].sort((a, b) => a - b)) {
+    if (c < minGap || duration - c < minGap) continue; // não cria shots minúsculos nas pontas
+    if (!out.length || c - out[out.length - 1] >= minGap) out.push(c);
+  }
+  return out;
 }
 
 function tryLoadAnalysis(slug: string): Analysis | null {
