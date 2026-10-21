@@ -1,5 +1,6 @@
 import React from "react";
 import { AbsoluteFill, Html5Audio, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { jumpEffects, sfxCues } from "../../src/cues";
 import type { ResolvedTimeline } from "../../src/timeline";
 import { useGsapTimeline } from "../gsap/useGsapTimeline";
 import { seeded, useLayout } from "../layout";
@@ -23,7 +24,7 @@ export const FlashLayer: React.FC<{ tl: ResolvedTimeline; accent: string }> = ({
       const hit = (at: number, peak: number, dur: number) =>
         t.fromTo(flash, { opacity: peak }, { opacity: 0, duration: dur, ease: "power2.out" }, at);
 
-      for (const seg of tl.segments) if (seg.jump) hit(seg.outStart, 0.85, 0.22);
+      for (const t0 of jumpEffects(tl)) hit(t0, 0.7, 0.2);
       for (const s of tl.splashes) {
         if (s.kind === "flash") hit(s.t, 1, 0.4);
         if (s.kind === "impact") hit(s.t, 0.45 * s.intensity, 0.18);
@@ -65,23 +66,13 @@ export const FlashLayer: React.FC<{ tl: ResolvedTimeline; accent: string }> = ({
 // Efeitos sonoros sintetizados (public/sfx) nos splashes e nos cortes com salto.
 export const SfxTrack: React.FC<{ tl: ResolvedTimeline }> = ({ tl }) => {
   const { fps } = useVideoConfig();
-  const cues: { at: number; file: string; volume: number }[] = [];
-  for (const seg of tl.segments) if (seg.jump) cues.push({ at: seg.outStart - 0.12, file: "whoosh.wav", volume: 0.5 });
-  for (const s of tl.splashes) {
-    if (s.kind === "impact" || s.kind === "shockwave") cues.push({ at: s.t, file: "impact.wav", volume: 0.35 + 0.4 * s.intensity });
-    else if (s.kind === "glitch") cues.push({ at: s.t, file: "glitch.wav", volume: 0.4 });
-    else if (s.kind === "title3d" || s.kind === "particles") cues.push({ at: s.t - 0.05, file: "whoosh.wav", volume: 0.45 });
-  }
-  for (const c of tl.callouts) cues.push({ at: c.start, file: "pop.wav", volume: 0.4 });
   return (
     <>
-      {cues
-        .filter((c) => c.at >= 0)
-        .map((c, i) => (
-          <Sequence key={i} from={Math.round(c.at * fps)} durationInFrames={Math.round(1.5 * fps)} name={`sfx ${c.file}`} layout="none">
-            <Html5Audio src={staticFile(`sfx/${c.file}`)} volume={c.volume} />
-          </Sequence>
-        ))}
+      {sfxCues(tl).map((c, i) => (
+        <Sequence key={i} from={Math.round(c.at * fps)} durationInFrames={Math.round(1.5 * fps)} name={`sfx ${c.file}`} layout="none">
+          <Html5Audio src={staticFile(`sfx/${c.file}`)} volume={c.volume} />
+        </Sequence>
+      ))}
     </>
   );
 };

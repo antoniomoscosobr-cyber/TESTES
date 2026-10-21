@@ -8,6 +8,11 @@ export const HOOK_SECONDS = 2.6;
 export const END_CARD_SECONDS = 2.8;
 const MAX_WORDS_PER_PAGE = 4;
 const MAX_CHARS_PER_PAGE = 24;
+const MIN_LINE_COVERAGE = 0.6; // fração da frase que precisa estar no short para ser legendada
+const MIN_PAGE = 0.25;
+
+// Quanto tempo cada efeito ocupa na tela (para não começar um efeito que o card final cobriria).
+export const SPLASH_WINDOW: Record<string, number> = { particles: 1.3, shockwave: 1.0, title3d: 1.8, impact: 0.5, flash: 0.4, glitch: 0.4 };
 
 export type TimedWord = { text: string; start: number; end: number; emphasis: boolean };
 export type CaptionPage = { start: number; end: number; words: TimedWord[] };
@@ -26,6 +31,8 @@ export type ResolvedTimeline = {
   fps: number;
   durationInFrames: number;
   duration: number;
+  endCardStart: number;
+  beats: number[]; // beats da música no tempo do short (para o pulso de câmera)
   segments: ResolvedSegment[];
   pages: CaptionPage[];
   callouts: { start: number; end: number; text: string; style: z.infer<typeof CalloutStyleSchema> }[];
@@ -36,7 +43,33 @@ export function segmentOutDuration(seg: { srcStart: number; srcEnd: number; spee
   return Math.max(0, seg.srcEnd - seg.srcStart) / seg.speed;
 }
 
-export function resolveTimeline(short: Short, fps: number): ResolvedTimeline {
+// Trechos contínuos da fonte (segmentos colados, mesmo com velocidades diferentes) formam um "run":
+// dentro dele o tempo da fonte mapeia para o do short sem buracos.
+type Run = { srcStart: number; srcEnd: number; segs: ResolvedSegment[] };
+
+function buildRuns(segments: ResolvedSegment[]): Run[] {
+  const runs: Run[] = [];
+  for (const s of segments) {
+    const last = runs[runs.length - 1];
+    if (last && !s.jump) {
+      last.segs.push(s);
+      last.srcEnd = s.srcEnd;
+    } else {
+      runs.push({ srcStart: s.srcStart, srcEnd: s.srcEnd, segs: [s] });
+    }
+  }
+  return runs;
+}
+
+function mapInRun(run: Run, t: number): number {
+  for (const s of run.segs) {
+    if (t <= s.srcEnd + 1e-6) return s.outStart + (Math.max(t, s.srcStart) - s.srcStart) / s.speed;
+  }
+  const last = run.segs[run.segs.length - 1];
+  return last.outEnd;
+}
+
+export function resolveTimeline(short: Short, fps: number, sourceBeats: number[] = []): ResolvedTimeline {
   const segments: ResolvedSegment[] = [];
   let frame = 0;
   short.segments.forEach((seg, index) => {
@@ -54,68 +87,96 @@ export function resolveTimeline(short: Short, fps: number): ResolvedTimeline {
     });
     frame += durationInFrames;
   });
+  const duration = frame / fps;
+  // Card final só existe em shorts que comportam hook + card sem se sobreporem.
+  const endCardStart = duration > HOOK_SECONDS + END_CARD_SECONDS + 1 ? duration - END_CARD_SECONDS : duration;
+  const runs = buildRuns(segments);
 
   const srcToOut = (t: number): number | null => {
-    for (const s of segments) {
-      if (t >= s.srcStart && t <= s.srcEnd) return s.outStart + (t - s.srcStart) / s.speed;
-    }
+    for (const r of runs) if (t >= r.srcStart && t <= r.srcEnd) return mapInRun(r, t);
     return null;
   };
 
-  // Para um intervalo da fonte, pega o maior trecho que cai dentro de um segmento.
-  const mapRange = (a: number, b: number): { start: number; end: number } | null => {
-    let best: { start: number; end: number } | null = null;
-    for (const s of segments) {
-      const lo = Math.max(a, s.srcStart);
-      const hi = Math.min(b, s.srcEnd);
-      if (hi - lo <= 0) continue;
-      const start = s.outStart + (lo - s.srcStart) / s.speed;
-      const end = s.outStart + (hi - s.srcStart) / s.speed;
-      if (!best || end - start > best.end - best.start) best = { start, end };
-    }
-    if (!best) return null;
-    const original = (b - a) || 1;
-    return best.end - best.start >= Math.min(0.35, original * 0.4) ? best : null;
-  };
-
-  const pages: CaptionPage[] = [];
+  // ---- Legendas ----
+  const lines: TimedWord[][] = [];
   for (const line of short.captions) {
-    const range = mapRange(line.srcStart, line.srcEnd);
-    if (!range) continue;
-    pages.push(...paginate(line.text, line.emphasis, range.start, range.end));
+    const words = sourceWords(line);
+    if (!words.length) continue;
+    const totalChars = words.reduce((acc, w) => acc + w.text.length + 1, 0);
+    // O run que contém mais da frase; palavras fora dele são descartadas.
+    let best: { run: Run; kept: typeof words; chars: number } | null = null;
+    for (const run of runs) {
+      const kept = words.filter((w) => (w.start + w.end) / 2 >= run.srcStart && (w.start + w.end) / 2 <= run.srcEnd);
+      const chars = kept.reduce((acc, w) => acc + w.text.length + 1, 0);
+      if (!best || chars > best.chars) best = { run, kept, chars };
+    }
+    if (!best || best.chars / totalChars < MIN_LINE_COVERAGE) continue;
+    const { run } = best;
+    lines.push(
+      best.kept.map((w) => ({
+        text: w.text,
+        start: mapInRun(run, Math.max(w.start, run.srcStart)),
+        end: mapInRun(run, Math.min(w.end, run.srcEnd)),
+        emphasis: w.emphasis,
+      })),
+    );
   }
-  pages.sort((a, b) => a.start - b.start);
-  // Evita sobreposição entre páginas: cada uma termina quando a próxima começa.
-  for (let i = 0; i < pages.length - 1; i++) {
-    if (pages[i].end > pages[i + 1].start) {
-      pages[i].end = pages[i + 1].start;
-      clampWords(pages[i]);
+  lines.sort((x, y) => x[0].start - y[0].start);
+  // Frases sobrepostas: a seguinte espera a anterior terminar (comprimida no tempo que sobra).
+  for (let i = 1; i < lines.length; i++) {
+    const prevEnd = lines[i - 1][lines[i - 1].length - 1].end;
+    const cur = lines[i];
+    const start = cur[0].start;
+    const end = cur[cur.length - 1].end;
+    if (start >= prevEnd) continue;
+    if (end - prevEnd < MIN_PAGE) {
+      lines.splice(i--, 1);
+      continue;
+    }
+    const k = (end - prevEnd) / (end - start);
+    for (const w of cur) {
+      w.start = prevEnd + (w.start - start) * k;
+      w.end = prevEnd + (w.end - start) * k;
     }
   }
+  const pages = lines
+    .flatMap((ws) => chunkPages(ws))
+    .map((p) => clampPage(p, endCardStart))
+    .filter((p): p is CaptionPage => p !== null && p.end - p.start >= MIN_PAGE);
 
+  // ---- Callouts: depois do hook e antes do card final ----
   const callouts = short.callouts
     .map((c) => {
       const t = srcToOut(c.srcTime);
-      return t === null ? null : { start: t, end: t + c.duration, text: c.text, style: c.style };
+      if (t === null) return null;
+      const start = Math.max(t, HOOK_SECONDS + 0.1);
+      const end = Math.min(start + c.duration, endCardStart);
+      return end - start >= 0.5 ? { start, end, text: c.text, style: c.style } : null;
     })
     .filter((c): c is NonNullable<typeof c> => c !== null);
 
+  // ---- Splashes: nada que o card final cubra; título 3D não briga com o hook ----
   const splashes = short.splashes
     .map((s, index) => {
       const t = srcToOut(s.srcTime);
-      return t === null ? null : { t, kind: s.kind, text: s.text, intensity: s.intensity, index };
+      if (t === null) return null;
+      if (t + (SPLASH_WINDOW[s.kind] ?? 0.5) > endCardStart + 0.05) return null;
+      if (s.kind === "title3d" && t < HOOK_SECONDS) return null;
+      return { t, kind: s.kind, text: s.text, intensity: s.intensity, index };
     })
     .filter((s): s is NonNullable<typeof s> => s !== null);
 
-  return {
-    fps,
-    durationInFrames: frame,
-    duration: frame / fps,
-    segments,
-    pages: pages.filter((p) => p.end - p.start > 0.05),
-    callouts,
-    splashes,
-  };
+  // Callout em cima de um título 3D disputa o mesmo espaço: o título ganha.
+  const titles = splashes.filter((s) => s.kind === "title3d").map((s) => [s.t, s.t + SPLASH_WINDOW.title3d]);
+  const freeCallouts = callouts.filter((c) => !titles.some(([a, b]) => c.start < b && c.end > a));
+
+  const beats = sourceBeats
+    .map((b) => srcToOut(b))
+    .filter((t): t is number => t !== null && t > 0.2 && t < endCardStart)
+    .sort((x, y) => x - y)
+    .filter((t, i, arr) => i === 0 || t - arr[i - 1] > 0.2);
+
+  return { fps, durationInFrames: frame, duration, endCardStart, beats, segments, pages, callouts: freeCallouts, splashes };
 }
 
 const normalize = (w: string) =>
@@ -125,49 +186,59 @@ const normalize = (w: string) =>
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^\p{L}\p{N}]/gu, "");
 
-// Divide uma frase em páginas curtas (estilo TikTok) e distribui o tempo de cada
-// palavra proporcional ao número de caracteres — a tradução PT-BR não tem timestamps
-// por palavra, então essa é a melhor aproximação sem forced alignment.
-export function paginate(text: string, emphasis: string[], start: number, end: number): CaptionPage[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0 || end <= start) return [];
-  const emph = new Set(emphasis.flatMap((e) => e.split(/\s+/)).map(normalize).filter(Boolean));
-
-  const chunks: string[][] = [];
-  let current: string[] = [];
-  for (const w of words) {
-    const len = [...current, w].join(" ").length;
-    if (current.length > 0 && (current.length >= MAX_WORDS_PER_PAGE || len > MAX_CHARS_PER_PAGE)) {
-      chunks.push(current);
-      current = [];
-    }
-    current.push(w);
-    if (/[.!?…]$/.test(w)) {
-      chunks.push(current);
-      current = [];
-    }
+// Palavras da frase com tempo na fonte: as do whisper quando batem com o texto; senão,
+// estimadas pelo tamanho de cada palavra (traduções PT-BR não têm timestamps por palavra).
+function sourceWords(line: Short["captions"][number]): { text: string; start: number; end: number; emphasis: boolean }[] {
+  const emph = new Set(line.emphasis.flatMap((e) => e.split(/\s+/)).map(normalize).filter(Boolean));
+  const texts = line.text.split(/\s+/).filter(Boolean);
+  if (!texts.length || line.srcEnd <= line.srcStart) return [];
+  if (line.words && line.words.length === texts.length) {
+    return line.words.map((w, i) => ({ text: texts[i], start: w.start, end: w.end, emphasis: emph.has(normalize(texts[i])) }));
   }
-  if (current.length) chunks.push(current);
-
   const weight = (w: string) => w.length + 1;
-  const total = words.reduce((acc, w) => acc + weight(w), 0);
-  const span = end - start;
-  let cursor = start;
-  return chunks.map((chunk) => {
-    const pageStart = cursor;
-    const timed: TimedWord[] = chunk.map((w) => {
-      const d = (weight(w) / total) * span;
-      const tw = { text: w, start: cursor, end: cursor + d, emphasis: emph.has(normalize(w)) };
-      cursor += d;
-      return tw;
-    });
-    return { start: pageStart, end: cursor, words: timed };
+  const total = texts.reduce((acc, w) => acc + weight(w), 0);
+  const span = line.srcEnd - line.srcStart;
+  let cursor = line.srcStart;
+  return texts.map((text) => {
+    const d = (weight(text) / total) * span;
+    const w = { text, start: cursor, end: cursor + d, emphasis: emph.has(normalize(text)) };
+    cursor += d;
+    return w;
   });
 }
 
-function clampWords(page: CaptionPage) {
-  for (const w of page.words) {
-    w.start = Math.min(w.start, page.end);
-    w.end = Math.min(w.end, page.end);
+// Páginas curtas estilo TikTok (até 4 palavras / 24 caracteres, quebra em fim de frase).
+function chunkPages(words: TimedWord[]): CaptionPage[] {
+  const pages: CaptionPage[] = [];
+  let cur: TimedWord[] = [];
+  const flush = () => {
+    if (cur.length) pages.push({ start: cur[0].start, end: cur[cur.length - 1].end, words: cur });
+    cur = [];
+  };
+  for (const w of words) {
+    const len = [...cur.map((x) => x.text), w.text].join(" ").length;
+    if (cur.length && (cur.length >= MAX_WORDS_PER_PAGE || len > MAX_CHARS_PER_PAGE)) flush();
+    cur.push(w);
+    if (/[.!?…]$/.test(w.text)) flush();
   }
+  flush();
+  // Cada página fica na tela até a próxima começar (sem "piscar" entre palavras próximas).
+  for (let i = 0; i < pages.length - 1; i++) {
+    const gap = pages[i + 1].start - pages[i].end;
+    if (gap > 0 && gap < 0.6) pages[i].end = pages[i + 1].start;
+  }
+  return pages;
+}
+
+function clampPage(p: CaptionPage, limit: number): CaptionPage | null {
+  if (p.start >= limit) return null;
+  if (p.end <= limit) return p;
+  const words = p.words.filter((w) => w.start < limit).map((w) => ({ ...w, end: Math.min(w.end, limit) }));
+  return words.length ? { start: p.start, end: limit, words } : null;
+}
+
+// Mantido para uso direto (e testes): distribui uma frase num intervalo do short.
+export function paginate(text: string, emphasis: string[], start: number, end: number): CaptionPage[] {
+  const words = sourceWords({ srcStart: start, srcEnd: end, text, emphasis });
+  return chunkPages(words);
 }

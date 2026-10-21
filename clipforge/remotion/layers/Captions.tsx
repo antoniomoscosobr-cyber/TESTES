@@ -26,6 +26,9 @@ export const Captions: React.FC<{ pages: CaptionPage[]; accent: string }> = ({ p
 
 const Page: React.FC<{ page: CaptionPage; accent: string }> = ({ page, accent }) => {
   const { u, width, captionY } = useLayout();
+  // Palavras muito longas (comuns em PT-BR) encolhem a página inteira para não vazar da tela.
+  const longest = Math.max(1, ...page.words.map((w) => w.text.length + (w.emphasis ? 2 : 0)));
+  const shrink = Math.max(0.55, Math.min(1, 14 / longest));
   const ref = useGsapTimeline<HTMLDivElement>(
     (tl, root) => {
       const words = root.querySelectorAll<HTMLSpanElement>("[data-word]");
@@ -66,7 +69,7 @@ const Page: React.FC<{ page: CaptionPage; accent: string }> = ({ page, accent })
           gap: `${4 * u}px ${26 * u}px`,
           fontFamily: FONT_BODY,
           fontWeight: 900,
-          fontSize: 82 * u,
+          fontSize: 82 * u * shrink,
           lineHeight: 1.05,
           textTransform: "uppercase",
           textAlign: "center",

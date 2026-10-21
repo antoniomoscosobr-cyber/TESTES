@@ -1,5 +1,6 @@
 import React from "react";
 import { AbsoluteFill } from "remotion";
+import { jumpEffects } from "../../src/cues";
 import type { ResolvedTimeline } from "../../src/timeline";
 import { useGsapTimeline } from "../gsap/useGsapTimeline";
 import { seeded } from "../layout";
@@ -11,14 +12,21 @@ export const VideoFx: React.FC<{ tl: ResolvedTimeline; children: React.ReactNode
     (t, el) => {
       t.set(el, { scale: 1, x: 0, y: 0, filter: "none" }, 0);
 
-      for (const seg of tl.segments) {
-        if (!seg.jump) continue;
+      const jumps = jumpEffects(tl);
+      for (const at of jumps) {
         t.fromTo(
           el,
           { scale: 1.14, filter: "blur(10px) brightness(1.6)" },
           { scale: 1, filter: "blur(0px) brightness(1)", duration: 0.24, ease: "expo.out" },
-          seg.outStart,
+          at,
         );
+      }
+
+      // Pulso sutil no beat da música, longe dos outros movimentos de câmera.
+      const busy = [...jumps, ...tl.splashes.map((s) => s.t)];
+      for (const b of tl.beats) {
+        if (busy.some((x) => Math.abs(x - b) < 0.6)) continue;
+        t.fromTo(el, { scale: 1.014 }, { scale: 1, duration: 0.22, ease: "power2.out" }, b);
       }
 
       for (const s of tl.splashes) {

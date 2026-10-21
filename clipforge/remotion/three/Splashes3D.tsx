@@ -1,6 +1,6 @@
 import { ThreeCanvas } from "@remotion/three";
-import React, { useLayoutEffect, useMemo, useRef } from "react";
-import { Sequence, useCurrentFrame, useVideoConfig } from "remotion";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { continueRender, delayRender, Sequence, useCurrentFrame, useVideoConfig } from "remotion";
 import * as THREE from "three";
 import type { ResolvedTimeline } from "../../src/timeline";
 import { FONT_DISPLAY } from "../fonts";
@@ -129,9 +129,23 @@ const Shockwave: React.FC<{ splash: Splash; accent: string }> = ({ splash, accen
 // em camadas para simular extrusão; entra voando e girando.
 const Title3D: React.FC<{ splash: Splash; accent: string }> = ({ splash, accent }) => {
   const p = useProgress(DURATION.title3d);
-  const { vertical } = useLayout();
+  const { vertical, width, height } = useLayout();
   const text = (splash.text || "").toUpperCase();
+  // A textura é desenhada com a fonte Anton: espera ela carregar (senão sai com fonte de fallback).
+  // Normalmente a fonte já carregou (useFonts segura o primeiro frame); se não, segura o render
+  // até ela chegar e a textura ser recriada.
+  const fontSpec = `400 100px ${FONT_DISPLAY}`;
+  const [fontReady, setFontReady] = useState(() => document.fonts.check(fontSpec, text || "A"));
+  const [handle] = useState(() => (fontReady ? null : delayRender("Fonte do título 3D")));
+  useEffect(() => {
+    if (fontReady) return;
+    document.fonts
+      .load(fontSpec, text || "A")
+      .catch(() => undefined)
+      .finally(() => setFontReady(true));
+  }, [fontReady, fontSpec, text]);
   const texture = useMemo(() => {
+    if (!fontReady) return null;
     const canvas = document.createElement("canvas");
     canvas.width = 2048;
     canvas.height = 512;
@@ -148,11 +162,17 @@ const Title3D: React.FC<{ splash: Splash; accent: string }> = ({ splash, accent 
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
-  }, [text]);
+  }, [text, fontReady]);
+  useEffect(() => {
+    if (texture && handle !== null) continueRender(handle);
+  }, [texture, handle]);
 
   const enter = easeOutExpo(Math.min(1, p / 0.45));
   const exit = p > 0.8 ? (p - 0.8) / 0.2 : 0;
-  const w = vertical ? 7 : 11;
+  // Largura visível no plano z≈0 (câmera fov 50 em z=10): o título nunca passa de 88% dela.
+  const visibleW = 2 * 10 * Math.tan((25 * Math.PI) / 180) * (width / height);
+  const w = Math.min(vertical ? 7 : 11, visibleW * 0.88);
+  if (!texture) return null;
   const layers = 16;
   return (
     <group

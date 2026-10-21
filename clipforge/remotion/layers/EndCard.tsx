@@ -19,7 +19,10 @@ export const EndCard: React.FC<Props> = ({ totalFrames, ...props }) => {
 
 const Card: React.FC<Omit<Props, "totalFrames">> = ({ title, subtitle, cta, accent }) => {
   const { u, vertical } = useLayout();
-  const letters = [...title];
+  const words = title.split(/\s+/).filter(Boolean);
+  // Nomes longos encolhem para caber em até 2 linhas.
+  const longest = Math.max(1, ...words.map((w) => w.length));
+  const titleScale = Math.min(1, 9 / longest, 18 / Math.max(1, title.length) + 0.35);
   const ref = useGsapTimeline<HTMLDivElement>(
     (tl, root) => {
       const shade = root.querySelector("[data-shade]");
@@ -41,10 +44,14 @@ const Card: React.FC<Omit<Props, "totalFrames">> = ({ title, subtitle, cta, acce
     <AbsoluteFill ref={ref} style={{ alignItems: "center", justifyContent: "center", perspective: 800 }}>
       <AbsoluteFill data-shade style={{ background: "radial-gradient(circle, rgba(0,0,0,0.55), rgba(0,0,0,0.92))", opacity: 0 }} />
       <div style={{ position: "relative", textAlign: "center", width: "90%" }}>
-        <div style={{ fontFamily: FONT_DISPLAY, fontSize: (vertical ? 150 : 140) * u, lineHeight: 1, color: "#fff", textTransform: "uppercase", whiteSpace: "pre-wrap" }}>
-          {letters.map((ch, i) => (
-            <span key={i} data-ch style={{ display: "inline-block", opacity: 0 }}>
-              {ch === " " ? " " : ch}
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: (vertical ? 150 : 140) * u * titleScale, lineHeight: 1, color: "#fff", textTransform: "uppercase" }}>
+          {words.map((word, wi) => (
+            <span key={wi} style={{ display: "inline-block", whiteSpace: "nowrap", margin: `0 ${14 * u}px` }}>
+              {[...word].map((ch, i) => (
+                <span key={i} data-ch style={{ display: "inline-block", opacity: 0 }}>
+                  {ch}
+                </span>
+              ))}
             </span>
           ))}
         </div>

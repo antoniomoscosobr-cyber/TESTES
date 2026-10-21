@@ -24,6 +24,9 @@ const Hook: React.FC<{ text: string; sub: string; accent: string }> = ({ text, s
       const els = root.querySelectorAll<HTMLSpanElement>("[data-word]");
       const bar = root.querySelector<HTMLDivElement>("[data-bar]");
       const subEl = root.querySelector<HTMLDivElement>("[data-sub]");
+      const box = root.querySelector<HTMLDivElement>("[data-box]");
+      // A caixa entra junto (o frame 0 não mostra uma caixa vazia).
+      tl.fromTo(box, { opacity: 0, scaleX: 0.6 }, { opacity: 1, scaleX: 1, duration: 0.16, ease: "power3.out" }, 0);
       tl.fromTo(bar, { scaleX: 0 }, { scaleX: 1, duration: 0.35, ease: "expo.out" }, 0);
       els.forEach((el, i) => {
         tl.fromTo(
@@ -51,7 +54,9 @@ const Hook: React.FC<{ text: string; sub: string; accent: string }> = ({ text, s
       }}
     >
       <div
+        data-box
         style={{
+          opacity: 0,
           display: "inline-block",
           padding: `${18 * u}px ${28 * u}px`,
           background: "rgba(0,0,0,0.72)",

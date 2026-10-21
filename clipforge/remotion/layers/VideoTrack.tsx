@@ -5,108 +5,89 @@ import { useLayout } from "../layout";
 
 type Props = { tl: ResolvedTimeline; src: string; bgSrc: string; srcWidth: number; srcHeight: number };
 
+// Só imagem: o som do trailer é tocado pelo AudioTrack (Overlays/Audio), separado, para poder
+// cruzar os cortes e manter o som em velocidade normal na câmera lenta.
 export const VideoTrack: React.FC<Props> = ({ tl, src, bgSrc, srcWidth, srcHeight }) => {
+  const aspect = srcWidth && srcHeight ? srcWidth / srcHeight : 16 / 9;
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      {tl.segments.map((seg, i) => {
-        const next = tl.segments[i + 1];
-        return (
-          <Sequence key={i} from={seg.from} durationInFrames={seg.durationInFrames} name={`seg ${i + 1}`}>
-            <SegmentView
-              seg={seg}
-              src={src}
-              bgSrc={bgSrc}
-              aspect={srcWidth && srcHeight ? srcWidth / srcHeight : 16 / 9}
-              fadeIn={seg.jump}
-              fadeOut={!next || next.jump}
-            />
-          </Sequence>
-        );
-      })}
+      {tl.segments.map((seg, i) => (
+        <Sequence key={i} from={seg.from} durationInFrames={seg.durationInFrames} name={`seg ${i + 1}`}>
+          <SegmentView seg={seg} src={src} bgSrc={bgSrc} aspect={aspect} />
+        </Sequence>
+      ))}
     </AbsoluteFill>
   );
 };
 
-const SegmentView: React.FC<{ seg: ResolvedSegment; src: string; bgSrc: string; aspect: number; fadeIn: boolean; fadeOut: boolean }> = ({
-  seg,
-  src,
-  bgSrc,
-  aspect,
-  fadeIn,
-  fadeOut,
-}) => {
+const SegmentView: React.FC<{ seg: ResolvedSegment; src: string; bgSrc: string; aspect: number }> = ({ seg, src, bgSrc, aspect }) => {
   const frame = useCurrentFrame();
   const { width, height, vertical } = useLayout();
-  const d = seg.durationInFrames;
   // Zoom lento contínuo: dá vida a planos parados.
-  const drift = interpolate(frame, [0, d], [1, 1.05], { extrapolateRight: "clamp" });
-
-  const volume = (f: number) =>
-    interpolate(f, [0, 3, Math.max(4, d - 3), d], [fadeIn ? 0 : 1, 1, 1, fadeOut ? 0 : 1], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    });
+  const drift = interpolate(frame, [0, seg.durationInFrames], [1, 1.05], { extrapolateRight: "clamp" });
 
   if (!src) return <Placeholder seg={seg} drift={drift} />;
 
-  const video = (style: React.CSSProperties, muted: boolean, file = src) => (
-    <OffthreadVideo
-      src={staticFile(file)}
-      trimBefore={seg.trimBefore}
-      playbackRate={seg.speed}
-      muted={muted}
-      volume={muted ? 0 : volume}
-      style={style}
-    />
+  const video = (style: React.CSSProperties, file = src) => (
+    <OffthreadVideo src={staticFile(file)} trimBefore={seg.trimBefore} playbackRate={seg.speed} muted style={style} />
   );
+  const blurredBg = (useFile: boolean) =>
+    useFile ? (
+      <AbsoluteFill style={{ transform: "scale(1.1)" }}>
+        {video({ width: "100%", height: "100%", objectFit: "cover" }, bgSrc)}
+        <AbsoluteFill style={{ background: "rgba(0,0,0,0.42)" }} />
+      </AbsoluteFill>
+    ) : (
+      <AbsoluteFill style={{ transform: "scale(1.25)", filter: "blur(38px) brightness(0.5) saturate(1.3)" }}>
+        {video({ width: "100%", height: "100%", objectFit: "cover" })}
+      </AbsoluteFill>
+    );
 
   if (!vertical) {
+    // 16:9 nativo preenche; mais largo que isso (2.39:1 já sem tarjas) volta a ter tarjas,
+    // como no cinema; vertical/quadrado fica no centro com fundo desfocado.
+    if (aspect >= 1.7 && aspect <= 1.86) {
+      return <AbsoluteFill style={{ transform: `scale(${drift})` }}>{video({ width: "100%", height: "100%", objectFit: "cover" })}</AbsoluteFill>;
+    }
     return (
-      <AbsoluteFill style={{ transform: `scale(${drift})` }}>
-        {video({ width: "100%", height: "100%", objectFit: "cover" }, false)}
+      <AbsoluteFill style={{ overflow: "hidden" }}>
+        {aspect < 1.7 ? blurredBg(false) : null}
+        <AbsoluteFill style={{ transform: `scale(${drift})` }}>{video({ width: "100%", height: "100%", objectFit: "contain" })}</AbsoluteFill>
       </AbsoluteFill>
     );
   }
 
-  if (seg.fit === "crop") {
+  if (seg.fit === "crop" && aspect > width / height) {
     const vw = height * aspect;
     const left = Math.min(0, Math.max(width - vw, width / 2 - seg.focusX * vw));
     return (
       <AbsoluteFill style={{ overflow: "hidden" }}>
         <div style={{ position: "absolute", left, top: 0, width: vw, height, transform: `scale(${drift})`, transformOrigin: `${seg.focusX * 100}% 50%` }}>
-          {video({ width: "100%", height: "100%" }, false)}
+          {video({ width: "100%", height: "100%" })}
         </div>
       </AbsoluteFill>
     );
   }
 
-  // blur: quadro inteiro no centro, cópia desfocada preenchendo o fundo
-  // (pré-desfocada no ingest quando existe; blur CSS só como fallback).
-  const fh = width / aspect;
+  // blur: quadro inteiro no centro (cabendo na largura e em ~80% da altura), fundo desfocado
+  // (pré-desfocado no ingest; blur CSS só como fallback).
+  const fw = Math.min(width, height * 0.8 * aspect);
+  const fh = fw / aspect;
   return (
     <AbsoluteFill style={{ overflow: "hidden" }}>
-      {bgSrc ? (
-        <AbsoluteFill style={{ transform: "scale(1.1)" }}>
-          {video({ width: "100%", height: "100%", objectFit: "cover" }, true, bgSrc)}
-          <AbsoluteFill style={{ background: "rgba(0,0,0,0.42)" }} />
-        </AbsoluteFill>
-      ) : (
-        <AbsoluteFill style={{ transform: "scale(1.25)", filter: "blur(38px) brightness(0.5) saturate(1.3)" }}>
-          {video({ width: "100%", height: "100%", objectFit: "cover" }, true)}
-        </AbsoluteFill>
-      )}
+      {blurredBg(!!bgSrc)}
       <div
         style={{
           position: "absolute",
-          left: 0,
+          left: (width - fw) / 2,
           top: height * 0.46 - fh / 2,
-          width,
+          width: fw,
           height: fh,
           transform: `scale(${drift})`,
           boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
         }}
       >
-        {video({ width: "100%", height: "100%" }, false)}
+        {video({ width: "100%", height: "100%" })}
       </div>
     </AbsoluteFill>
   );

@@ -25,7 +25,7 @@ export const demoPlan: EditPlan = {
       captions: [
         { srcStart: 11, srcEnd: 14, text: "O mundo inteiro está em guerra", emphasis: ["guerra"] },
         { srcStart: 14.5, srcEnd: 18, text: "e só você pode decidir o que vem depois", emphasis: ["você"] },
-        { srcStart: 19, srcEnd: 23, text: "Prepare-se para a batalha final!", emphasis: ["batalha", "final"] },
+        { srcStart: 19, srcEnd: 23, text: "Prepare-se para a inacreditável batalha final!", emphasis: ["inacreditável", "final"] },
       ],
       callouts: [
         { srcTime: 15.5, duration: 1.2, text: "OLHA ISSO", style: "badge" },
@@ -36,11 +36,11 @@ export const demoPlan: EditPlan = {
         { srcTime: 41, kind: "particles", text: "", intensity: 0.9 },
         { srcTime: 12.5, kind: "impact", text: "", intensity: 0.9 },
         { srcTime: 16.8, kind: "shockwave", text: "", intensity: 0.8 },
-        { srcTime: 19.5, kind: "title3d", text: "DEMO GAME", intensity: 0.8 },
+        { srcTime: 19.5, kind: "title3d", text: "THE ELDER SCROLLS VI", intensity: 0.8 },
         { srcTime: 22.2, kind: "glitch", text: "", intensity: 0.8 },
         { srcTime: 30.2, kind: "flash", text: "", intensity: 1 },
       ],
-      endCard: { title: "DEMO GAME", subtitle: "Disponível em 2027", cta: "Segue pra mais trailers" },
+      endCard: { title: "THE ELDER SCROLLS VI", subtitle: "Disponível em 2027", cta: "Segue pra mais trailers" },
       accentColor: "#ff3d3d",
     },
   ],

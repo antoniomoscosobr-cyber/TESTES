@@ -7,6 +7,7 @@ import { Callouts } from "../layers/Callout";
 import { Captions } from "../layers/Captions";
 import { EndCard } from "../layers/EndCard";
 import { HookTitle } from "../layers/HookTitle";
+import { AudioTrack } from "../layers/AudioTrack";
 import { FlashLayer, ProgressBar, SfxTrack } from "../layers/Overlays";
 import { VideoFx } from "../layers/VideoFx";
 import { VideoTrack } from "../layers/VideoTrack";
@@ -15,7 +16,7 @@ import { Splashes3D } from "../three/Splashes3D";
 export const Short: React.FC<ShortProps> = ({ plan, shortIndex }) => {
   useFonts();
   const short = plan ? (plan.shorts[shortIndex] ?? plan.shorts[0]) : undefined;
-  const tl = useMemo(() => (short ? resolveTimeline(short, FPS) : null), [short]);
+  const tl = useMemo(() => (short ? resolveTimeline(short, FPS, plan?.beats ?? []) : null), [short, plan?.beats]);
   // O plano chega pelo calculateMetadata (Studio com slug) — antes disso não há o que desenhar.
   if (!plan || !short || !tl) return null;
   const accent = short.accentColor;
@@ -25,6 +26,7 @@ export const Short: React.FC<ShortProps> = ({ plan, shortIndex }) => {
       <VideoFx tl={tl}>
         <VideoTrack tl={tl} src={plan.source.file} bgSrc={plan.source.bgFile} srcWidth={plan.source.width} srcHeight={plan.source.height} />
       </VideoFx>
+      <AudioTrack tl={tl} src={plan.source.file} />
       <FlashLayer tl={tl} accent={accent} />
       <Splashes3D tl={tl} accent={accent} />
       <Captions pages={tl.pages} accent={accent} />
