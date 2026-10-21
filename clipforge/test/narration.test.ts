@@ -4,7 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { energyEnvelope, findOffset, readEnvelope, shiftPlan, writeEnvelope } from "../src/analyze/swap";
+import { workPath } from "../src/config";
 import { narrationGain, NARRATION_DUCK } from "../src/cues";
+import { planFits } from "../src/plan/index";
 import { narrationSrt, scriptText } from "../src/render/publish";
 import { EditPlanSchema } from "../src/schema";
 import { resolveTimeline } from "../src/timeline";
@@ -281,4 +283,31 @@ test("shiftPlan puxa para dentro o que passaria do fim e tira o short sem trecho
   ]);
   const gone = shiftPlan(plan, [[-20, -100]], 86);
   assert.equal(gone.shorts.length, 0);
+});
+
+test("palavra curta da narração não some da tela numa fala rápida", () => {
+  const tl = resolveTimeline(
+    fakeShort({
+      segments: [{ srcStart: 0, srcEnd: 30, speed: 1, focusX: 0.5, fit: "crop" }],
+      narration: [{ start: 5, end: 7, text: "Ei. Olha isso aqui agora, gente!", emphasis: [] }],
+    }),
+    30,
+  );
+  const words = tl.pages.flatMap((p) => p.words.map((w) => w.text));
+  assert.deepEqual(words, ["Ei.", "Olha", "isso", "aqui", "agora,", "gente!"]);
+  assert.ok(tl.pages.every((p) => p.end - p.start >= 0.25 - 1e-9));
+});
+
+test("make não troca um plan.json com erro de digitação por um plano novo", () => {
+  const slug = "_t-planfits";
+  const dir = workPath(slug);
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.writeFileSync(path.join(dir, "plan.json"), '{ "source": { "duration": 60, }');
+    assert.equal(planFits(slug, { duration: 60, width: 1920, height: 1080 }), true);
+    fs.writeFileSync(path.join(dir, "plan.json"), JSON.stringify({ source: { duration: 90, width: 640, height: 360 } }));
+    assert.equal(planFits(slug, { duration: 60, width: 1920, height: 1080 }), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

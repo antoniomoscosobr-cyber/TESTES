@@ -190,9 +190,13 @@ export async function swapSource(slug: string, file: string, opts: { refit?: boo
     } catch (err) {
       throw new Error(`${pendingName} (troca de fonte interrompida) está ilegível: ${(err as Error).message}. Apague o arquivo e rode de novo.`);
     }
-    // Se o reingest nem começou (o trabalho local ainda é a fonte do plano), começa do zero.
-    const local = fs.existsSync(workPath(slug, "analysis.json")) ? loadAnalysis(slug) : null;
-    if (local && sameSource(local.source, pending.plan.source)) {
+    // Se o reingest nem começou (a análise local é anterior à troca e ainda é da fonte do
+    // plano), começa do zero. Uma análise feita depois (ex.: o original analisado de novo após
+    // uma troca que falhou) não apaga a troca pendente: ela é a única cópia do plano.
+    const analysisFile = workPath(slug, "analysis.json");
+    const local = fs.existsSync(analysisFile) ? loadAnalysis(slug) : null;
+    const untouched = local && fs.statSync(analysisFile).mtimeMs < fs.statSync(pendingFile).mtimeMs;
+    if (local && untouched && sameSource(local.source, pending.plan.source)) {
       fs.rmSync(pendingFile, { force: true });
       pending = null;
     } else console.log(`• retomando a troca de fonte que não terminou (${pendingName})`);
@@ -203,6 +207,7 @@ export async function swapSource(slug: string, file: string, opts: { refit?: boo
   else {
     plan = loadPlan(slug, { anySource: true, restore: false });
     oldEnv = await planSourceEnvelope(slug, plan);
+    fs.mkdirSync(workPath(slug), { recursive: true }); // checkout novo: só existe projects/<slug>/
     fs.writeFileSync(pendingFile, JSON.stringify({ plan, env: Array.from(oldEnv, (v) => Math.round(v * 10) / 10) }));
   }
 

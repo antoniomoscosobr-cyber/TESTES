@@ -183,7 +183,7 @@ export function resolveTimeline(short: Short, fps: number, sourceBeats: number[]
     }
   }
   const pages = lines
-    .flatMap((l) => chunkPages(l.words))
+    .flatMap((l) => (l.voice ? mergeShortPages(chunkPages(l.words)) : chunkPages(l.words)))
     .map((p) => clampPage(p, endCardStart))
     .filter((p): p is CaptionPage => p !== null && p.end - p.start >= MIN_PAGE);
 
@@ -329,6 +329,29 @@ function chunkPages(words: TimedWord[]): CaptionPage[] {
     if (gap > 0 && gap < 0.6) pages[i].end = pages[i + 1].start;
   }
   return pages;
+}
+
+// Na narração nenhuma palavra pode sumir da tela: página curta demais (ex.: "Ei." numa fala
+// rápida) junta com a vizinha se couber, ou pega emprestado o tempo da seguinte.
+function mergeShortPages(pages: CaptionPage[]): CaptionPage[] {
+  const fits = (ws: TimedWord[]) => ws.length <= MAX_WORDS_HARD && ws.map((w) => w.text).join(" ").length <= MAX_CHARS_PER_PAGE;
+  const out = pages.map((p) => ({ ...p, words: [...p.words] }));
+  for (let i = 0; i < out.length; i++) {
+    const p = out[i];
+    if (p.end - p.start >= MIN_PAGE) continue;
+    const next = out[i + 1];
+    const prev = out[i - 1];
+    if (next && fits([...p.words, ...next.words])) {
+      out.splice(i, 2, { start: p.start, end: next.end, words: [...p.words, ...next.words] });
+      i--;
+    } else if (prev && fits([...prev.words, ...p.words])) {
+      out.splice(i - 1, 2, { start: prev.start, end: p.end, words: [...prev.words, ...p.words] });
+      i -= 2;
+    } else if (next && next.end - (p.start + MIN_PAGE) >= MIN_PAGE) {
+      p.end = next.start = p.start + MIN_PAGE;
+    }
+  }
+  return out;
 }
 
 function clampPage(p: CaptionPage, limit: number): CaptionPage | null {

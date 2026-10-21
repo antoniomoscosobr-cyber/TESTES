@@ -115,9 +115,15 @@ const readSource = (file: string): SourceShape | null => {
 };
 
 // O plano deste slug (o local ou, sem ele, o guardado em projects/) foi feito para esta fonte?
+// Um plan.json local ilegível conta como "serve": o loadPlan seguinte mostra o erro de digitação
+// em vez de o make gerar e renderizar outro plano por cima da edição.
 export function planFits(slug: string, source: SourceShape): boolean {
   const work = workPath(slug, "plan.json");
-  const src = readSource(fs.existsSync(work) ? work : projectPath(slug, "plan.json"));
+  if (fs.existsSync(work)) {
+    const src = readSource(work);
+    return !src || sameSource(src, source);
+  }
+  const src = readSource(projectPath(slug, "plan.json"));
   return !!src && sameSource(src, source);
 }
 
