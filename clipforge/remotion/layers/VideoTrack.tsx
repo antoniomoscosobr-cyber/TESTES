@@ -86,7 +86,10 @@ const SegmentView: React.FC<{ seg: ResolvedSegment; src: string; bgSrc: string; 
   return (
     <AbsoluteFill style={{ overflow: "hidden" }}>
       {bgSrc ? (
-        <AbsoluteFill style={{ transform: "scale(1.1)" }}>{video({ width: "100%", height: "100%", objectFit: "cover" }, true, bgSrc)}</AbsoluteFill>
+        <AbsoluteFill style={{ transform: "scale(1.1)" }}>
+          {video({ width: "100%", height: "100%", objectFit: "cover" }, true, bgSrc)}
+          <AbsoluteFill style={{ background: "rgba(0,0,0,0.42)" }} />
+        </AbsoluteFill>
       ) : (
         <AbsoluteFill style={{ transform: "scale(1.25)", filter: "blur(38px) brightness(0.5) saturate(1.3)" }}>
           {video({ width: "100%", height: "100%", objectFit: "cover" }, true)}
