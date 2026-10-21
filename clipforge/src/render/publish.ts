@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ffmpeg } from "../ffmpeg";
 import type { EditPlan } from "../schema";
-import { FPS, resolveTimeline, type CaptionPage } from "../timeline";
+import { FPS, HOOK_SECONDS, resolveTimeline, type CaptionPage } from "../timeline";
 
 // Alvo de loudness das plataformas de vídeo curto (TikTok/Reels/Shorts normalizam perto disso).
 const LOUDNESS = { I: -14, TP: -1.5, LRA: 11 };
@@ -121,7 +121,7 @@ export function scriptText(plan: EditPlan, index: number): string {
   const out: string[] = [];
   out.push(`ROTEIRO — ${short.title}`);
   out.push(`Vídeo: ${tl.duration.toFixed(1)}s · ${lines.length} falas · ${words} palavras · ritmo médio ${(words / Math.max(1, spoken)).toFixed(1)} palavras/s`);
-  out.push(`Hook na tela (0:00–0:02.6): ${short.hook.text}${short.hook.sub ? ` / ${short.hook.sub}` : ""}`);
+  out.push(`Hook na tela (${clock(0)}–${clock(HOOK_SECONDS)}): ${short.hook.text}${short.hook.sub ? ` / ${short.hook.sub}` : ""}`);
   out.push(`Card final (${clock(tl.endCardStart)}–${clock(tl.duration)}): ${short.endCard.title} · ${short.endCard.cta}`);
   out.push("");
   lines.forEach((l, i) => {
