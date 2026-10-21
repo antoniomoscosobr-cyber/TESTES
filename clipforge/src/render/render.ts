@@ -5,6 +5,7 @@ import { bundle } from "@remotion/bundler";
 import { renderMedia, renderStill, selectComposition, type ChromiumOptions } from "@remotion/renderer";
 import { FORMATS, OUT_DIR, PUBLIC_DIR, REMOTION_ENTRY, workPath, type FormatKey } from "../config";
 import type { EditPlan, ShortProps } from "../schema";
+import { coverFrame, normalizeLoudness, writeSidecars } from "./publish";
 import { ensureSfx } from "./sfx";
 
 export type RenderOptions = { formats: FormatKey[]; only?: number[]; concurrency?: number };
@@ -78,6 +79,7 @@ export async function renderPlan(plan: EditPlan, opts: RenderOptions): Promise<s
   await withBundle(plan, async ({ serveUrl, browserExecutable, chromiumOptions }) => {
     for (const [i, short] of plan.shorts.entries()) {
       if (opts.only?.length && !opts.only.includes(i + 1)) continue;
+      writeSidecars(plan, i, outDir);
       for (const fmt of opts.formats) {
         const { id } = FORMATS[fmt];
         const inputProps: ShortProps = { plan, slug: "", shortIndex: i };
@@ -107,6 +109,20 @@ export async function renderPlan(plan: EditPlan, opts: RenderOptions): Promise<s
                 process.stdout.write(`\r  ${short.id} ${fmt}: ${pct}%   `);
               }
             },
+          });
+          await normalizeLoudness(outputLocation);
+          // Capa (JPEG) no frame em que o hook está completo.
+          const cover = path.join(outDir, `${short.id}-${fmt}-cover.jpg`);
+          await renderStill({
+            composition,
+            serveUrl,
+            frame: Math.min(composition.durationInFrames - 1, coverFrame(short.hook.text.split(/\s+/).length, !!short.hook.sub)),
+            output: cover,
+            imageFormat: "jpeg",
+            jpegQuality: 90,
+            inputProps,
+            browserExecutable,
+            chromiumOptions,
           });
           const secs = ((Date.now() - t0) / 1000).toFixed(0);
           process.stdout.write(`\r  ✓ ${short.id} ${fmt} (${(composition.durationInFrames / composition.fps).toFixed(1)}s) em ${secs}s → ${outputLocation}\n`);

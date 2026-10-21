@@ -1,17 +1,19 @@
 # ClipForge
 
-Gera shorts automáticos a partir de trailers de games: escolhe os melhores cortes, reenquadra para 9:16, coloca legendas dinâmicas PT-BR, hooks, callouts e splashes animados em **GSAP** e **Three.js**, sincronizados com os beats e impactos do áudio. Renderiza com **Remotion**.
+Gera shorts automáticos a partir de trailers de games. Escolhe os melhores cortes e reenquadra para 9:16 seguindo a ação. Coloca legendas dinâmicas, hook, callouts e splashes animados em **GSAP** e **Three.js**, sincronizados com os beats e impactos do áudio. Junto com cada vídeo entrega o texto do post, as hashtags, um `.srt` e a capa. Renderiza com **Remotion**.
 
 ```
-trailer.mp4 → analyze → plan (Claude ou heurística) → plan.json → render → out/<slug>/short-01-9x16.mp4
-                                                         ↑ revisar/ajustar no Remotion Studio
+trailer.mp4 → analyze → plan (Claude ou heurística) → plan.json → render → out/<slug>/
+                                                         ↑ revisar no preview/Studio, editar o plan.json
 ```
 
 ## Requisitos
 
-- Node 20+ e `ffmpeg`/`ffprobe` no PATH
-- Opcional: `ANTHROPIC_API_KEY` (ou `ant auth login`) para o diretor com Claude. Sem credenciais, usa o plano heurístico.
-- Opcional: acesso a `huggingface.co` para baixar o modelo Whisper (transcrição da fala). Sem ele, o pipeline segue sem legendas da fala original.
+- Node 20+
+- `ffmpeg` e `ffprobe` 5.1+ no PATH ([download](https://ffmpeg.org/download.html))
+- Opcional:
+  - **Diretor com Claude** (legendas PT-BR traduzidas, cortes e textos escolhidos vendo as imagens): `ANTHROPIC_API_KEY`. Sem ela, usa o plano heurístico.
+  - **Transcrição da fala** (whisper.cpp): `git`, `make` e um compilador C/C++. No macOS, `xcode-select --install`; no Linux, `build-essential`. Também precisa de acesso a `huggingface.co` para baixar o modelo. Sem isso, o pipeline segue e avisa.
 
 ```bash
 cd clipforge
@@ -22,32 +24,52 @@ npm install
 
 ```bash
 # tudo de uma vez: 4 shorts em 9:16 e 16:9
-npx tsx src/cli.ts make ~/Downloads/trailer.mp4 --game "Nome do Jogo"
+npm run make -- ~/Downloads/trailer.mp4
 
-# ou passo a passo
-npx tsx src/cli.ts analyze ~/Downloads/trailer.mp4 --slug meu-jogo
-npx tsx src/cli.ts plan meu-jogo --count 4            # --heuristic para não usar a API
-npx tsx src/cli.ts preview meu-jogo --index 1 --at 0.5,3,10   # PNGs de frames soltos, em segundos
-npx tsx src/cli.ts studio meu-jogo --index 1          # revisar no Remotion Studio
-npx tsx src/cli.ts render meu-jogo --format 9x16 --only 1,3
+# com legendas PT-BR próprias (ex.: as oficiais do trailer em .srt/.vtt)
+npm run make -- ~/Downloads/trailer.mp4 --subs ~/Downloads/trailer.pt-BR.srt
+
+# passo a passo
+npm run analyze -- ~/Downloads/trailer.mp4 --slug meu-jogo
+npm run plan -- meu-jogo --count 4                   # --heuristic para não usar a API
+npm run preview -- meu-jogo --index 1 --at 0.5,3,10  # PNGs de frames soltos
+npm run studio -- meu-jogo --index 1                 # Studio lendo o plan.json
+npm run render -- meu-jogo --format 9x16 --only 1,3
+npm run clean                                        # espaço usado / apagar trabalhos
 ```
 
-Para testar sem trailer: `npm run fixture` gera `fixtures/fixture-trailer.mp4` (sintético) e `npm run studio` abre o Studio com um plano de demonstração.
+O `make` reaproveita a análise e o plano quando o trailer não mudou. `--reanalyze` e `--replan` forçam refazer; o plano anterior vira `plan.N.json`.
+
+Para testar sem trailer: `npm run fixture` gera `fixtures/fixture-trailer.mp4`, um trailer sintético. `npm run studio` sem slug abre um plano de demonstração.
+
+## Saída (`out/<slug>/`)
+
+| Arquivo | Conteúdo |
+|---|---|
+| `short-01-9x16.mp4`, `short-01-16x9.mp4` | H.264 BT.709, áudio AAC normalizado a −14 LUFS (pico −1.5 dBTP) |
+| `short-01-9x16-cover.jpg` | Capa no momento em que o hook está completo |
+| `short-01.txt` | Título, descrição e hashtags prontos para colar no post |
+| `short-01.json` | Metadados: hook, duração, trechos do trailer usados |
+| `short-01.srt` | Legendas no tempo do short |
 
 ## Etapas
 
 | Etapa | O que faz | Arquivos |
 |---|---|---|
-| **analyze** | Proxy 30fps; cortes de cena e movimento (`scene` score do ffmpeg); telas pretas; energia, onsets/impactos, BPM e beats (spectral flux + DP beat tracking); 1 keyframe por shot e contact sheets 4×4; transcrição com whisper.cpp | `src/analyze/*`, saída `public/work/<slug>/analysis.json` |
-| **plan** | Janelas candidatas pontuadas (energia, movimento, ritmo de cortes, impactos, fala, pretos). O **diretor Claude** (`claude-opus-5-5`, visão + JSON estruturado) vê os contact sheets e a análise e roteiriza cada short: segmentos, reenquadramento, legendas PT-BR, hook, callouts, splashes e end card. Depois tudo é "snapado" a cortes de cena/beats/impactos | `src/plan/*`, saída `plan.json` |
-| **render** | Composições Remotion `Short916` (1080×1920) e `Short169` (1920×1080). Sem GPU, em 4 núcleos, leva ~7–8 s de render por segundo de vídeo (um short de 30s ≈ 4 min) | `remotion/*`, `src/render/*` |
+| **analyze** | Proxy 30fps com tarjas pretas removidas (cropdetect). Detecta cortes de cena e movimento, telas pretas, cartelas (classificação etária, logos, texto legal) e o shot do logo final. No áudio: energia, impactos, BPM, beats e trechos com voz. Por shot, estima o foco da ação para o crop 9:16. Gera contact sheets e roda a transcrição com whisper.cpp. Só refaz se o arquivo do trailer mudar. | `src/analyze/*` → `public/work/<slug>/analysis.json` |
+| **plan** | Pontua janelas candidatas (energia, movimento, ritmo de cortes, impactos, fala; penaliza pretos e cartelas). O **diretor Claude** (`claude-opus-5-5`, visão + JSON estruturado) roteiriza cada short; se falhar por qualquer motivo, entra o heurístico: cold open, trecho contínuo ou montagem cortada no beat, logo do jogo no fim. Depois tudo é ajustado: cortes em troca de cena ou beat (sem "piscadas" nem cortar palavras), efeitos nos impactos, enquadramento por shot. | `src/plan/*` → `plan.json` |
+| **render** | Composições Remotion `Short916` (1080×1920) e `Short169` (1920×1080), loudness, capa e arquivos do post. Sem GPU, em 4 núcleos, leva ~7–8 s por segundo de vídeo (um short de 30 s ≈ 4 min). | `remotion/*`, `src/render/*` |
 
-O `plan.json` usa **tempos do trailer original**; `src/timeline.ts` converte para a linha do tempo do short (eventos fora dos segmentos são descartados). Dá para editar o `plan.json` à mão e renderizar de novo.
+O `plan.json` usa **tempos do trailer original**. `src/timeline.ts` converte para a linha do tempo do short: eventos fora dos segmentos somem e nada fica sob o card final. Dá para editar o `plan.json` à mão; ele é validado antes do render.
 
-## Camadas visuais
+## Camadas visuais e de áudio
 
-- **Vídeo** (`layers/VideoTrack.tsx`): `crop` (tela cheia seguindo `focusX`) ou `blur` (quadro inteiro com fundo desfocado); zoom lento contínuo; crossfade de áudio nos saltos.
-- **GSAP** (`gsap/useGsapTimeline.ts`): timeline pausada e posicionada com `seek(frame/fps)` a cada frame — determinístico no render paralelo. Usado em legendas palavra a palavra, hook, callouts (`badge`, `stamp`, `glitch`), zoom punch/tremida nos impactos, whip zoom nos cortes, clarões, barras de glitch e end card.
+- **Vídeo** (`layers/VideoTrack.tsx`): `crop` (tela cheia seguindo `focusX`) ou `blur` (quadro inteiro sobre um fundo pré-desfocado); zoom lento contínuo.
+- **Áudio** (`layers/AudioTrack.tsx`): crossfade nos saltos, câmera lenta sem esticar o som, folga de ganho com ducking sob os SFX, fade final sob o card.
+- **GSAP** (`gsap/useGsapTimeline.ts`): timeline pausada e posicionada com `seek(frame/fps)` a cada frame, determinística no render paralelo. Usada em:
+  - legendas palavra a palavra, hook e callouts (`badge`, `stamp`, `glitch`)
+  - zoom punch e tremida nos impactos, whip zoom nos cortes, pulso no beat
+  - clarões, barras de glitch e card final
 - **Three.js** (`three/Splashes3D.tsx`, via `@remotion/three`): `particles` (estilhaços instanciados), `shockwave` (anéis aditivos) e `title3d` (título com extrusão em camadas).
 - **SFX** sintetizados com ffmpeg em `public/sfx` (impact, whoosh, glitch, pop). Troque por samples próprios mantendo os nomes.
 
@@ -58,7 +80,8 @@ O `plan.json` usa **tempos do trailer original**; `src/timeline.ts` converte par
 | `ANTHROPIC_API_KEY` | Diretor com Claude |
 | `CLIPFORGE_NO_WHISPER=1` | Pula a transcrição |
 | `CLIPFORGE_WHISPER_MODEL` | `tiny`, `base`, `small` (padrão), `medium`… |
-| `CLIPFORGE_BROWSER` | Chromium/Chrome Headless Shell a usar no render |
+| `CLIPFORGE_GL` | Renderizador WebGL: padrão `angle` (GPU) no macOS/Windows e `swangle` (CPU) no Linux |
+| `CLIPFORGE_BROWSER` | Chromium/Chrome Headless Shell a usar no render (senão o Remotion baixa um) |
 | `REMOTION_LICENSE_KEY` | Licença Remotion (empresas com mais de 3 pessoas) |
 
 ## Testes

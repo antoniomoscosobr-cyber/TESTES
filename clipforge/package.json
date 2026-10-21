@@ -8,8 +8,14 @@
     "clipforge": "./src/cli.ts"
   },
   "scripts": {
-    "clipforge": "tsx src/cli.ts",
+    "make": "tsx src/cli.ts make",
+    "analyze": "tsx src/cli.ts analyze",
+    "plan": "tsx src/cli.ts plan",
+    "render": "tsx src/cli.ts render",
+    "preview": "tsx src/cli.ts preview",
     "studio": "tsx src/cli.ts studio",
+    "clean": "tsx src/cli.ts clean",
+    "clipforge": "tsx src/cli.ts",
     "fixture": "bash scripts/make-fixture.sh",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
@@ -42,5 +48,8 @@
     "@types/three": "^0.186.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
