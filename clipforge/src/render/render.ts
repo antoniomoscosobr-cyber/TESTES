@@ -110,6 +110,17 @@ function jobsFor(plan: EditPlan, i: number, formats: FormatKey[], outDir: string
   return jobs;
 }
 
+// Versão sem legenda e stems de um render anterior que não se aplicam mais (narração removida,
+// SFX desligados) saem de out/. Com --no-extras nada é apagado: os que existem continuam valendo.
+function removeStaleExtras(plan: EditPlan, i: number, outDir: string) {
+  const short = plan.shorts[i];
+  const base = path.join(outDir, short.id);
+  const narrated = resolveTimeline(short, FPS, plan.beats).narration.length > 0;
+  const stale = narrated ? [] : [...(Object.keys(FORMATS) as FormatKey[]).map((f) => `${base}-${f}-sem-legenda.mp4`), `${base}-trilha.wav`];
+  if (!narrated || !plan.sfx) stale.push(`${base}-sfx.wav`);
+  for (const f of stale) fs.rmSync(f, { force: true });
+}
+
 export async function renderPlan(plan: EditPlan, opts: RenderOptions): Promise<string[]> {
   const outDir = path.join(OUT_DIR, plan.slug);
   fs.mkdirSync(outDir, { recursive: true });
@@ -120,6 +131,7 @@ export async function renderPlan(plan: EditPlan, opts: RenderOptions): Promise<s
     for (const [i, short] of plan.shorts.entries()) {
       if (opts.only?.length && !opts.only.includes(i + 1)) continue;
       writeSidecars(plan, i, outDir);
+      removeStaleExtras(plan, i, outDir);
       for (const job of jobsFor(plan, i, opts.formats, outDir, opts.extras ?? true)) {
         const inputProps: ShortProps = { plan, slug: "", shortIndex: i, ...job.props };
         const t0 = Date.now();

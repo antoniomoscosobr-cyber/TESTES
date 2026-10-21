@@ -223,3 +223,62 @@ test("envelope guardado leva a forma da fonte", () => {
   assert.deepEqual(source, { duration: 90.1, width: 640, height: 360 });
   fs.rmSync(path.dirname(file), { recursive: true, force: true });
 });
+
+test("fala da narração na pausa entre duas palavras da legenda original não some", () => {
+  const tl = resolveTimeline(
+    fakeShort({
+      segments: [{ srcStart: 0, srcEnd: 30, speed: 1, focusX: 0.5, fit: "crop" }],
+      captions: [
+        {
+          srcStart: 4,
+          srcEnd: 9,
+          text: "We will rise. Again and again",
+          emphasis: [],
+          words: [
+            { text: "We", start: 4, end: 4.3 },
+            { text: "will", start: 4.3, end: 4.6 },
+            { text: "rise.", start: 4.6, end: 5 },
+            { text: "Again", start: 7, end: 7.5 },
+            { text: "and", start: 7.5, end: 7.8 },
+            { text: "again", start: 7.8, end: 9 },
+          ],
+        },
+      ],
+      narration: [{ start: 5.3, end: 6.7, text: "Olha isso!", emphasis: [] }],
+    }),
+    30,
+  );
+  const page = tl.pages.find((p) => p.words.some((w) => w.text === "Olha"));
+  assert.ok(page, tl.pages.map((p) => p.words.map((w) => w.text).join(" ")).join(" | "));
+  assert.ok(Math.abs(page.start - 5.3) < 1e-6);
+  for (const p of tl.pages) if (p !== page) assert.ok(p.end <= 5.3 + 1e-6 || p.start >= 6.7 - 1e-6, `página sobre a narração: ${p.start}-${p.end}`);
+});
+
+test("roteiro avisa quando a fala passa do fim do vídeo", () => {
+  const plan = planWith(
+    fakeShort({
+      segments: [{ srcStart: 0, srcEnd: 20, speed: 1, focusX: 0.5, fit: "crop" }],
+      narration: [{ start: 13, end: 22, text: "um dois três quatro cinco seis sete oito nove dez onze doze", emphasis: [] }],
+    }),
+  );
+  assert.match(scriptText(plan, 0), /passa 2\.0s do fim do vídeo/);
+});
+
+test("shiftPlan puxa para dentro o que passaria do fim e tira o short sem trechos", () => {
+  const plan = planWith(
+    fakeShort({
+      segments: [
+        { srcStart: 10, srcEnd: 12, speed: 1, focusX: 0.5, fit: "crop" },
+        { srcStart: 84, srcEnd: 88, speed: 1, focusX: 0.5, fit: "crop" },
+      ],
+    }),
+  );
+  plan.source.duration = 90;
+  const out = shiftPlan(plan, [[0, 0]], 86);
+  assert.deepEqual(out.shorts[0].segments.map((s) => [s.srcStart, s.srcEnd]), [
+    [10, 12],
+    [82, 86],
+  ]);
+  const gone = shiftPlan(plan, [[-20, -100]], 86);
+  assert.equal(gone.shorts.length, 0);
+});

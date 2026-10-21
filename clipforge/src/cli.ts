@@ -6,7 +6,7 @@ import { Command } from "commander";
 import { analyze, loadAnalysis } from "./analyze/index";
 import { keepProject, swapSource } from "./analyze/swap";
 import { FORMATS, ROOT, slugFor, workPath, type FormatKey } from "./config";
-import { keptPlanFits, loadPlan, makePlan } from "./plan/index";
+import { loadPlan, makePlan, planFits } from "./plan/index";
 import { renderPlan, renderPreview, workSize } from "./render/render";
 import { ensureSfx } from "./render/sfx";
 
@@ -89,9 +89,8 @@ program
   .action(async (trailer: string, o) => {
     const slug: string = o.slug ?? slugFor(trailer);
     const analysis = await analyze(trailer, slug, { force: o.reanalyze, reuse: !o.reanalyze });
-    const hasPlan = fs.existsSync(workPath(slug, "plan.json"));
-    // Plano guardado em projects/<slug>/ para este mesmo trailer (ex.: sessão nova) também vale.
-    const reuse = !o.replan && (hasPlan ? !analysis.fresh : keptPlanFits(slug, analysis.source));
+    // Reaproveita o plano (local ou guardado em projects/<slug>/) feito para este mesmo trailer.
+    const reuse = !o.replan && planFits(slug, analysis.source);
     const plan = reuse
         ? (console.log("• plano: reaproveitando plan.json (use --replan para refazer)"), loadPlan(slug))
         : await makePlan(analysis, { heuristic: o.heuristic, game: o.game, count: o.count, sfx: o.sfx, subs: o.subs });

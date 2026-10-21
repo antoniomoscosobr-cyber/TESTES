@@ -32,7 +32,7 @@ export type ResolvedTimeline = {
   durationInFrames: number;
   duration: number;
   endCardStart: number;
-  narration: { start: number; end: number; text: string }[]; // falas da narração (tempo do short)
+  narration: { start: number; end: number; text: string; overflow?: number }[]; // falas da narração (tempo do short)
   beats: number[]; // beats da música no tempo do short (para o pulso de câmera)
   segments: ResolvedSegment[];
   pages: CaptionPage[];
@@ -112,7 +112,8 @@ export function resolveTimeline(short: Short, fps: number, sourceBeats: number[]
     narration.push({ start, end, wordsEnd: Math.max(end, n.end), text, emphasis: n.emphasis });
   }
   const underNarration = (a: number, b: number) => narration.some((n) => a < n.end && b > n.start);
-  const lines: TimedWord[][] = [];
+  type Line = { words: TimedWord[]; voice: boolean };
+  const lines: Line[] = [];
   for (const line of short.captions) {
     const words = sourceWords(line);
     if (!words.length) continue;
@@ -133,13 +134,16 @@ export function resolveTimeline(short: Short, fps: number, sourceBeats: number[]
       emphasis: w.emphasis,
     }));
     // A narração tem prioridade: palavras da fala original por baixo dela não viram legenda.
-    // O resto da frase continua, em trechos contínuos (sem sobra de uma palavra só).
+    // O resto da frase continua, em trechos contínuos (sem sobra de uma palavra só); uma fala
+    // que cabe na pausa entre duas palavras também separa os trechos.
     let part: TimedWord[] = [];
     const flush = () => {
-      if (part.length >= 2 || (part.length && part.length === mapped.length)) lines.push(part);
+      if (part.length >= 2 || (part.length && part.length === mapped.length)) lines.push({ words: part, voice: false });
       part = [];
     };
     for (const w of mapped) {
+      const last = part[part.length - 1];
+      if (last && underNarration(last.end, w.start)) flush();
       if (underNarration(w.start, w.end)) flush();
       else part.push(w);
     }
@@ -148,28 +152,38 @@ export function resolveTimeline(short: Short, fps: number, sourceBeats: number[]
   // Narração: já está no tempo do short; palavras distribuídas pela duração de cada fala.
   for (const n of narration) {
     const words = sourceWords({ srcStart: n.start, srcEnd: n.wordsEnd, text: n.text, emphasis: n.emphasis });
-    if (words.length) lines.push(words);
+    if (words.length) lines.push({ words, voice: true });
   }
-  lines.sort((x, y) => x[0].start - y[0].start);
-  // Frases sobrepostas: a seguinte espera a anterior terminar (comprimida no tempo que sobra).
+  lines.sort((x, y) => x.words[0].start - y.words[0].start || Number(y.voice) - Number(x.voice));
+  // Frases sobrepostas. A narração nunca cede: a legenda original antes dela perde o trecho que
+  // a cobre. Nos outros casos, a seguinte espera a anterior terminar (comprimida no que sobra).
   for (let i = 1; i < lines.length; i++) {
-    const prevEnd = lines[i - 1][lines[i - 1].length - 1].end;
+    const prev = lines[i - 1];
     const cur = lines[i];
-    const start = cur[0].start;
-    const end = cur[cur.length - 1].end;
+    const prevEnd = prev.words[prev.words.length - 1].end;
+    const start = cur.words[0].start;
+    const end = cur.words[cur.words.length - 1].end;
     if (start >= prevEnd) continue;
+    if (cur.voice && !prev.voice) {
+      prev.words = prev.words.filter((w) => w.start < start).map((w) => ({ ...w, end: Math.min(w.end, start) }));
+      if (!prev.words.length) {
+        lines.splice(i - 1, 1);
+        i = Math.max(0, i - 2); // compara a fala de novo com a linha que ficou antes dela
+      }
+      continue;
+    }
     if (end - prevEnd < MIN_PAGE) {
       lines.splice(i--, 1);
       continue;
     }
     const k = (end - prevEnd) / (end - start);
-    for (const w of cur) {
+    for (const w of cur.words) {
       w.start = prevEnd + (w.start - start) * k;
       w.end = prevEnd + (w.end - start) * k;
     }
   }
   const pages = lines
-    .flatMap((ws) => chunkPages(ws))
+    .flatMap((l) => chunkPages(l.words))
     .map((p) => clampPage(p, endCardStart))
     .filter((p): p is CaptionPage => p !== null && p.end - p.start >= MIN_PAGE);
 
@@ -210,7 +224,8 @@ export function resolveTimeline(short: Short, fps: number, sourceBeats: number[]
     durationInFrames: frame,
     duration,
     endCardStart,
-    narration: narration.map(({ start, end, text }) => ({ start, end, text })),
+    // overflow: quanto a fala passa do fim do vídeo (as palavras finais não aparecem)
+    narration: narration.map(({ start, end, wordsEnd, text }) => ({ start, end, text, ...(wordsEnd - end > 0.05 ? { overflow: wordsEnd - end } : {}) })),
     beats,
     segments,
     pages,
@@ -326,6 +341,7 @@ function clampPage(p: CaptionPage, limit: number): CaptionPage | null {
 // Página que não cabe numa linha vira duas linhas equilibradas, sem partir nomes nem fechar a
 // primeira linha em artigo/preposição ("COM A / VICE CITY", não "COM A VICE / CITY").
 const ONE_LINE_CHARS = 15;
+const ROW_MAX_CHARS = 16; // acima disso a linha quebra sozinha na tela (3 linhas)
 const rowLength = (ws: { text: string; emphasis: boolean }[]) => ws.reduce((acc, w) => acc + w.text.length + (w.emphasis ? 2 : 0), 0) + ws.length - 1;
 export function captionRows<W extends { text: string; emphasis: boolean }>(words: W[]): W[][] {
   if (words.length < 2 || rowLength(words) <= ONE_LINE_CHARS) return [words];
@@ -333,7 +349,8 @@ export function captionRows<W extends { text: string; emphasis: boolean }>(words
   let best = Infinity;
   for (let k = 1; k < words.length; k++) {
     const a = words[k - 1].text;
-    const cost = Math.max(rowLength(words.slice(0, k)), rowLength(words.slice(k))) + (WEAK_END.test(a) ? 4 : 0) + (splitsName(a, words[k].text) ? 100 : 0);
+    const widest = Math.max(rowLength(words.slice(0, k)), rowLength(words.slice(k)));
+    const cost = widest + (WEAK_END.test(a) ? 4 : 0) + (splitsName(a, words[k].text) ? 100 : 0) + (widest > ROW_MAX_CHARS ? 200 : 0);
     if (cost < best) {
       best = cost;
       cut = k;

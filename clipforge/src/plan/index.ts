@@ -106,34 +106,54 @@ type SourceShape = { duration: number; width: number; height: number };
 // Mesmo arquivo de trailer (resolução e duração iguais): um plano feito para um vale para o outro.
 export const sameSource = (a: SourceShape, b: SourceShape) => a.width === b.width && a.height === b.height && Math.abs(a.duration - b.duration) < 0.15;
 
-// Há um plano guardado (clipforge keep) feito para esta fonte?
-export function keptPlanFits(slug: string, source: SourceShape): boolean {
-  const kept = projectPath(slug, "plan.json");
-  if (!fs.existsSync(kept)) return false;
+const readSource = (file: string): SourceShape | null => {
   try {
-    const raw = JSON.parse(fs.readFileSync(kept, "utf8")) as { source?: SourceShape };
-    return !!raw.source && sameSource(raw.source, source);
+    return (JSON.parse(fs.readFileSync(file, "utf8")) as { source?: SourceShape }).source ?? null;
   } catch {
-    return false;
+    return null;
   }
+};
+
+// O plano deste slug (o local ou, sem ele, o guardado em projects/) foi feito para esta fonte?
+export function planFits(slug: string, source: SourceShape): boolean {
+  const work = workPath(slug, "plan.json");
+  const src = readSource(fs.existsSync(work) ? work : projectPath(slug, "plan.json"));
+  return !!src && sameSource(src, source);
 }
 
-// anySource: restaura o plano guardado mesmo que a análise local seja de outro arquivo (swap-source).
-export function loadPlan(slug: string, opts: { anySource?: boolean } = {}): EditPlan {
-  const file = workPath(slug, "plan.json");
-  if (!fs.existsSync(file)) {
-    const kept = projectPath(slug, "plan.json");
+// Sem plano local, usa o guardado em projects/<slug>/ (copiando para o trabalho, salvo restore:false).
+// O plano precisa ser da mesma fonte que está no trabalho local, senão os cortes caem no lugar
+// errado; anySource pula essa checagem (swap-source, que existe justamente para isso).
+export function loadPlan(slug: string, opts: { anySource?: boolean; restore?: boolean } = {}): EditPlan {
+  const work = workPath(slug, "plan.json");
+  const kept = projectPath(slug, "plan.json");
+  let file = work;
+  if (!fs.existsSync(work)) {
     if (!fs.existsSync(kept)) throw new Error(`Sem plano para "${slug}". Rode: clipforge plan ${slug}`);
-    const analysisFile = workPath(slug, "analysis.json");
-    if (!opts.anySource && fs.existsSync(analysisFile)) {
-      const { source } = JSON.parse(fs.readFileSync(analysisFile, "utf8")) as { source: SourceShape };
-      if (!keptPlanFits(slug, source)) {
-        throw new Error(`projects/${slug}/plan.json foi feito para outra versão do trailer. Para usar com o arquivo analisado: clipforge swap-source ${slug} <arquivo>`);
-      }
+    file = kept;
+  }
+  if (!opts.anySource) {
+    if (fs.existsSync(workPath(slug, "swap-pending.json"))) {
+      throw new Error(`A troca de fonte de "${slug}" não terminou. Rode de novo: clipforge swap-source ${slug} <arquivo>`);
     }
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.copyFileSync(kept, file);
+    const analysisFile = workPath(slug, "analysis.json");
+    const local = fs.existsSync(analysisFile) ? readSource(analysisFile) : null;
+    const planSource = readSource(file);
+    const name = file === kept ? `projects/${slug}/plan.json` : "plan.json";
+    if (local && planSource && !sameSource(planSource, local)) {
+      throw new Error(
+        `${name} foi feito para outra versão do trailer (${planSource.width}x${planSource.height}, ${planSource.duration.toFixed(1)}s) e não para a analisada (${local.width}x${local.height}, ${local.duration.toFixed(1)}s). Para usar com ela: clipforge swap-source ${slug} <arquivo>`,
+      );
+    }
+    if (!local && file === kept && fs.existsSync(workPath(slug, "source.mp4"))) {
+      throw new Error(`A análise de "${slug}" não terminou. Rode clipforge analyze de novo antes de usar o plano guardado.`);
+    }
+  }
+  if (file === kept && opts.restore !== false) {
+    fs.mkdirSync(path.dirname(work), { recursive: true });
+    fs.copyFileSync(kept, work);
     console.log(`• plano restaurado de projects/${slug}/plan.json`);
+    file = work;
   }
   let raw: unknown;
   try {

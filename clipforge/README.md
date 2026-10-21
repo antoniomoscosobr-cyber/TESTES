@@ -38,7 +38,7 @@ npm run render -- meu-jogo --format 9x16 --only 1,3
 npm run clean                                        # espaço usado / apagar trabalhos
 ```
 
-O `make` reaproveita a análise e o plano quando o trailer não mudou. `--reanalyze` e `--replan` forçam refazer; o plano anterior vira `plan.N.json`.
+O `make` reaproveita a análise e o plano (inclusive o guardado em `projects/<slug>/`) quando o trailer não mudou. `--reanalyze` refaz a análise e `--replan` refaz o plano; o anterior vira `plan.N.json`. Para renderizar de novo só os vídeos principais, sem a versão sem legenda e os stems: `npm run render -- meu-jogo --no-extras`.
 
 Para testar sem trailer: `npm run fixture` gera `fixtures/fixture-trailer.mp4`, um trailer sintético. `npm run studio` sem slug abre um plano de demonstração.
 

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { projectPath, workPath } from "../config";
 import { decodePcm } from "../ffmpeg";
-import { loadPlan, sameSource, savePlan } from "../plan/index";
+import { loadPlan, sameSource, savePlan, validatePlan } from "../plan/index";
 import { splitByShots } from "../plan/snap";
 import { EditPlanSchema, type Analysis, type EditPlan } from "../schema";
 import { analyze, loadAnalysis } from "./index";
@@ -118,8 +118,10 @@ async function planSourceEnvelope(slug: string, plan: EditPlan): Promise<Float32
 }
 
 // Aplica os deslocamentos ao plano: cada segmento com o seu, e eventos (legendas, callouts,
-// splashes) com o do segmento mais próximo. A narração está no tempo do short e não muda.
-export function shiftPlan(plan: EditPlan, segOffsets: number[][]): EditPlan {
+// splashes) com o do segmento mais próximo. A narração está no tempo do short e não muda, então
+// cada segmento mantém o comprimento: o que passaria do início/fim do arquivo novo é empurrado
+// para dentro (com aviso) e o que não existe nele sai. Short sem nenhum trecho sai do plano.
+export function shiftPlan(plan: EditPlan, segOffsets: number[][], newDuration = Infinity): EditPlan {
   const shorts = plan.shorts.map((s, si) => {
     const offs = segOffsets[si];
     const offsetAt = (t: number) => {
@@ -141,13 +143,22 @@ export function shiftPlan(plan: EditPlan, segOffsets: number[][]): EditPlan {
       // segmento que cairia antes do início do arquivo novo sai.
       segments: s.segments.flatMap((g, gi) => {
         const len = g.srcEnd - g.srcStart;
-        const start = g.srcStart + offs[gi];
-        if (start + len <= 0.1) {
-          console.warn(`⚠ ${s.id}: o trecho ${g.srcStart.toFixed(2)}–${g.srcEnd.toFixed(2)}s não existe no arquivo novo e saiu do short.`);
+        const span = `${s.id}: o trecho ${g.srcStart.toFixed(2)}–${g.srcEnd.toFixed(2)}s`;
+        let s0 = g.srcStart + offs[gi];
+        if (s0 + len <= 0.1 || s0 >= newDuration - 0.1) {
+          console.warn(`⚠ ${span} não existe no arquivo novo e saiu do short.`);
           return [];
         }
-        const s0 = Math.max(0, start);
-        return [{ ...g, srcStart: r(s0), srcEnd: r(s0 + len) }];
+        if (s0 < 0) {
+          console.warn(`⚠ ${span} começaria ${(-s0).toFixed(2)}s antes do início do arquivo novo: empurrado para 0. Confira no preview.`);
+          s0 = 0;
+        }
+        if (s0 + len > newDuration) {
+          const back = s0 - Math.max(0, newDuration - len);
+          console.warn(`⚠ ${span} passaria do fim do arquivo novo: puxado ${back.toFixed(2)}s para trás. Confira no preview.`);
+          s0 -= back;
+        }
+        return [{ ...g, srcStart: r(s0), srcEnd: r(Math.min(s0 + len, newDuration)) }];
       }),
       captions: s.captions.map((c) => {
         const o = offsetAt(c.srcStart);
@@ -157,23 +168,40 @@ export function shiftPlan(plan: EditPlan, segOffsets: number[][]): EditPlan {
       splashes: s.splashes.map((x) => ({ ...x, srcTime: r(x.srcTime + offsetAt(x.srcTime)) })),
     };
   });
-  return { ...plan, shorts };
+  const kept = shorts.filter((s) => {
+    if (!s.segments.length) console.warn(`⚠ ${s.id} saiu do plano: nenhum trecho dele existe no arquivo novo.`);
+    return s.segments.length > 0;
+  });
+  return { ...plan, shorts: kept };
 }
 
 // Troca a fonte de um plano (ex.: 360p → 1080p do mesmo trailer) sem refazer o roteiro.
 export async function swapSource(slug: string, file: string, opts: { refit?: boolean } = {}): Promise<EditPlan> {
   // O plano e o áudio antigo ficam salvos antes do reingest (que apaga o proxy antigo): se a
   // troca parar no meio, rodar de novo retoma daqui em vez de alinhar o arquivo novo com ele mesmo.
+  if (!fs.existsSync(file)) throw new Error(`Arquivo não encontrado: ${file}`);
   const pendingFile = workPath(slug, "swap-pending.json");
+  const pendingName = path.relative(process.cwd(), pendingFile);
+  let pending: { plan: EditPlan; env: Float32Array } | null = null;
+  if (fs.existsSync(pendingFile)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(pendingFile, "utf8")) as { plan: unknown; env: number[] };
+      pending = { plan: EditPlanSchema.parse(raw.plan), env: Float32Array.from(raw.env) };
+    } catch (err) {
+      throw new Error(`${pendingName} (troca de fonte interrompida) está ilegível: ${(err as Error).message}. Apague o arquivo e rode de novo.`);
+    }
+    // Se o reingest nem começou (o trabalho local ainda é a fonte do plano), começa do zero.
+    const local = fs.existsSync(workPath(slug, "analysis.json")) ? loadAnalysis(slug) : null;
+    if (local && sameSource(local.source, pending.plan.source)) {
+      fs.rmSync(pendingFile, { force: true });
+      pending = null;
+    } else console.log(`• retomando a troca de fonte que não terminou (${pendingName})`);
+  }
   let plan: EditPlan;
   let oldEnv: Float32Array;
-  if (fs.existsSync(pendingFile)) {
-    const pending = JSON.parse(fs.readFileSync(pendingFile, "utf8")) as { plan: unknown; env: number[] };
-    plan = EditPlanSchema.parse(pending.plan);
-    oldEnv = Float32Array.from(pending.env);
-    console.log("• retomando a troca de fonte que não terminou");
-  } else {
-    plan = loadPlan(slug, { anySource: true });
+  if (pending) ({ plan, env: oldEnv } = pending);
+  else {
+    plan = loadPlan(slug, { anySource: true, restore: false });
     oldEnv = await planSourceEnvelope(slug, plan);
     fs.writeFileSync(pendingFile, JSON.stringify({ plan, env: Array.from(oldEnv, (v) => Math.round(v * 10) / 10) }));
   }
@@ -198,7 +226,10 @@ export async function swapSource(slug: string, file: string, opts: { refit?: boo
       return local.offset;
     }),
   );
-  let shifted = shiftPlan(plan, segOffsets);
+  let shifted = shiftPlan(plan, segOffsets, analysis.source.duration);
+  if (!shifted.shorts.length) {
+    throw new Error(`Nenhum trecho do plano existe no arquivo novo: confira se é o mesmo trailer. O plano e o áudio antigo continuam em ${pendingName}.`);
+  }
   shifted = {
     ...shifted,
     source: {
@@ -213,7 +244,12 @@ export async function swapSource(slug: string, file: string, opts: { refit?: boo
   };
   // Com resolução melhor, o enquadramento pode voltar a seguir o foco de cada shot.
   if (opts.refit) shifted.shorts = shifted.shorts.map((s) => ({ ...s, segments: splitByShots(s.segments, analysis, true) }));
-  const valid = EditPlanSchema.parse(shifted);
+  const parsed = EditPlanSchema.safeParse(shifted);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
+    throw new Error(`O plano deslocado ficou inválido:\n${issues}\nO plano e o áudio antigo continuam em ${pendingName}; corrija o campo "plan" dele e rode de novo.`);
+  }
+  const valid = validatePlan(parsed.data);
   savePlan(slug, valid);
   fs.rmSync(pendingFile, { force: true });
   if (fs.existsSync(projectPath(slug))) await keepProject(slug); // o guardado passa a apontar para a fonte nova

@@ -74,6 +74,8 @@ test("duas linhas por página sem partir nomes nem fechar em artigo", () => {
   assert.deepEqual(rows("Relembra o trailer", ["trailer"]), ["Relembra", "o trailer"]);
   assert.deepEqual(rows("Até o Weazel News"), ["Até", "o Weazel News"]);
   assert.deepEqual(rows("caos total."), ["caos total."]);
+  // nome comprido: melhor partir o nome do que deixar uma linha que estoura a largura
+  assert.ok(rows("o Grand Theft Auto VI.").every((r) => r.length <= 16), rows("o Grand Theft Auto VI.").join(" / "));
 });
 
 test("ênfase ignora acento, caixa e pontuação", () => {

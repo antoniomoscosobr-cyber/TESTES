@@ -79,8 +79,13 @@ export function writeSidecars(plan: EditPlan, index: number, outDir: string): st
   // Arquivos que não se aplicam mais (narração ou legendas removidas) saem, para não sobrar
   // roteiro/.srt de um render anterior ao lado do vídeo novo.
   const narrationFiles = [`${base}-roteiro.txt`, `${base}-narracao.srt`];
+  const dropped = short.narration.length - tl.narration.length;
+  if (short.narration.length && !tl.narration.length) {
+    console.warn(`⚠ ${short.id}: nenhuma fala da narração cai dentro do short (0–${tl.duration.toFixed(1)}s, tempos do vídeo final): sem roteiro, versão sem legenda e stems.`);
+  } else if (dropped > 0) {
+    console.warn(`⚠ ${short.id}: ${dropped} fala(s) ignorada(s): fora do vídeo, sobrepostas, vazias ou curtas demais.`);
+  }
   if (tl.narration.length) {
-    if (tl.narration.length < short.narration.length) console.warn(`⚠ ${short.id}: ${short.narration.length - tl.narration.length} fala(s) fora do vídeo ou sobrepostas foram ignoradas.`);
     fs.writeFileSync(narrationFiles[0], scriptText(plan, index));
     fs.writeFileSync(narrationFiles[1], narrationSrt(plan, index));
     files.push(...narrationFiles);
@@ -126,6 +131,7 @@ export function scriptText(plan: EditPlan, index: number): string {
     const n = wordCount(l.text);
     out.push(`[${clock(l.start)} → ${clock(l.end)}]  (${d.toFixed(1)}s · ${n} palavras · ${(n / d).toFixed(1)} p/s)`);
     out.push(`  ${l.text}`);
+    if (l.overflow) out.push(`  ⚠ passa ${l.overflow.toFixed(1)}s do fim do vídeo: as últimas palavras não entram. Encurte a fala ou estique o último trecho.`);
   });
   out.push("");
   out.push("Dicas: grave em ~2.5 palavras/s, com energia. As legendas do vídeo seguem estes tempos; se o seu ritmo ficar diferente, use a versão sem legenda.");
