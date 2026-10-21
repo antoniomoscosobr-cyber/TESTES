@@ -2,9 +2,11 @@ import { spawn } from "node:child_process";
 
 export type RunResult = { stdout: Buffer; stderr: string };
 
-export function run(cmd: string, args: string[], opts: { quiet?: boolean } = {}): Promise<RunResult> {
+export type RunOptions = { quiet?: boolean; cwd?: string };
+
+export function run(cmd: string, args: string[], opts: RunOptions = {}): Promise<RunResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"], cwd: opts.cwd });
     const out: Buffer[] = [];
     let err = "";
     child.stdout.on("data", (d: Buffer) => out.push(d));
@@ -13,7 +15,9 @@ export function run(cmd: string, args: string[], opts: { quiet?: boolean } = {})
       // Mantém só o final do stderr para não estourar memória em vídeos longos.
       if (err.length > 4_000_000) err = err.slice(-2_000_000);
     });
-    child.on("error", reject);
+    child.on("error", (e: NodeJS.ErrnoException) =>
+      reject(e.code === "ENOENT" ? new Error(`"${cmd}" não encontrado no PATH.${/^ff/.test(cmd) ? " Instale o ffmpeg (inclui ffprobe): https://ffmpeg.org/download.html" : ""}`) : e),
+    );
     child.on("close", (code) => {
       if (code === 0) resolve({ stdout: Buffer.concat(out), stderr: err });
       else {
@@ -24,7 +28,15 @@ export function run(cmd: string, args: string[], opts: { quiet?: boolean } = {})
   });
 }
 
-export const ffmpeg = (args: string[]) => run("ffmpeg", ["-hide_banner", "-y", ...args]);
+export const ffmpeg = (args: string[], opts: RunOptions = {}) => run("ffmpeg", ["-hide_banner", "-y", ...args], opts);
+
+// Escapa um valor para uso dentro de uma opção de filtro do ffmpeg (ex.: fontfile=...), nos dois
+// níveis que o ffmpeg exige: o da opção (\\ ' :) e o do filtergraph (\\ ' [ ] , ;).
+// Sem isso, caminhos do Windows ("C:\\x") e com : , [ ] ' quebram o filtro.
+export function filterValue(v: string): string {
+  const opt = v.replace(/\\/g, "/").replace(/[\\':]/g, (c) => `\\${c}`);
+  return opt.replace(/[\\'[\],;]/g, (c) => `\\${c}`);
+}
 
 export type ProbeInfo = {
   duration: number;

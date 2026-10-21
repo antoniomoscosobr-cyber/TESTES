@@ -1,16 +1,23 @@
 import React from "react";
-import { Composition, type CalculateMetadataFunction } from "remotion";
-import { ShortPropsSchema, type ShortProps } from "../src/schema";
+import { Composition, staticFile, type CalculateMetadataFunction } from "remotion";
+import { EditPlanSchema, ShortPropsSchema, type ShortProps } from "../src/schema";
 import { FPS, resolveTimeline } from "../src/timeline";
 import { Short } from "./compositions/Short";
 import { demoPlan } from "./demo";
 
-const calculateMetadata: CalculateMetadataFunction<ShortProps> = ({ props }) => {
-  const short = props.plan.shorts[props.shortIndex] ?? props.plan.shorts[0];
-  return { durationInFrames: Math.max(1, resolveTimeline(short, FPS).durationInFrames), fps: FPS };
+const calculateMetadata: CalculateMetadataFunction<ShortProps> = async ({ props, abortSignal }) => {
+  let plan = props.plan;
+  if (props.slug) {
+    const res = await fetch(staticFile(`work/${props.slug}/plan.json`), { signal: abortSignal, cache: "no-store" });
+    if (!res.ok) throw new Error(`Não achei public/work/${props.slug}/plan.json (rode clipforge plan ${props.slug}).`);
+    plan = EditPlanSchema.parse(await res.json());
+  }
+  if (!plan) throw new Error("Sem plano: passe { plan } ou { slug } nas props.");
+  const short = plan.shorts[props.shortIndex] ?? plan.shorts[0];
+  return { durationInFrames: Math.max(1, resolveTimeline(short, FPS).durationInFrames), fps: FPS, props: { ...props, plan } };
 };
 
-const defaultProps: ShortProps = { plan: demoPlan, shortIndex: 0 };
+const defaultProps: ShortProps = { plan: demoPlan, slug: "", shortIndex: 0 };
 
 export const Root: React.FC = () => (
   <>

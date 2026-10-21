@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { FPS, PRESET } from "../config";
-import { ffmpeg, run } from "../ffmpeg";
+import { ffmpeg, filterValue, run } from "../ffmpeg";
 
 export type Keyframe = { index: number; shot: number; t: number; file: string };
 
@@ -44,7 +44,7 @@ export async function extractKeyframes(
   // Contact sheets 4x4 com o índice do keyframe desenhado em cada célula.
   const font = await findFont();
   const label = font
-    ? `drawtext=fontfile=${font}:text='#%{n}':x=8:y=8:fontsize=26:fontcolor=white:box=1:boxcolor=black@0.65:boxborderw=6,`
+    ? `drawtext=fontfile=${filterValue(font)}:text='#%{n}':x=8:y=8:fontsize=26:fontcolor=white:box=1:boxcolor=black@0.65:boxborderw=6,`
     : "";
   await ffmpeg([
     "-framerate", "1",

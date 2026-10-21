@@ -14,6 +14,7 @@ export type AudioAnalysis = {
   bpm: number | null;
   beatConfidence: number;
   beats: number[];
+  speech: { start: number; end: number }[];
   // Curvas em resolução cheia (HOP_SECONDS), usadas pelo scoring e não salvas.
   raw: { energy: Float32Array; envelope: Float32Array };
 };
@@ -22,6 +23,10 @@ export function analyzeAudio(pcm: Float32Array): AudioAnalysis {
   const nFrames = Math.max(0, Math.floor((pcm.length - FRAME) / HOP) + 1);
   const energy = new Float32Array(nFrames);
   const flux = new Float32Array(nFrames);
+  const voiceBand = new Float32Array(nFrames); // energia 300–3400 Hz
+  const fullBand = new Float32Array(nFrames); // energia 60–8000 Hz
+  const binHz = AUDIO_SR / FRAME;
+  const [v0, v1, f0, f1] = [300, 3400, 60, 8000].map((hz) => Math.round(hz / binHz));
   const fft = new FFT(FRAME);
   const window = new Float32Array(FRAME).map((_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (FRAME - 1)));
   const input = new Array<number>(FRAME).fill(0);
@@ -43,7 +48,10 @@ export function analyzeAudio(pcm: Float32Array): AudioAnalysis {
     for (let k = 0; k < FRAME / 2; k++) {
       const re = spectrum[2 * k];
       const im = spectrum[2 * k + 1];
-      cur[k] = Math.log1p(100 * Math.sqrt(re * re + im * im));
+      const pw = re * re + im * im;
+      if (k >= f0 && k <= f1) fullBand[f] += pw;
+      if (k >= v0 && k <= v1) voiceBand[f] += pw;
+      cur[k] = Math.log1p(100 * Math.sqrt(pw));
       const d = cur[k] - prev[k];
       if (d > 0) fl += d;
     }
@@ -65,6 +73,7 @@ export function analyzeAudio(pcm: Float32Array): AudioAnalysis {
     bpm: tempo.period ? round(60 / (tempo.period * HOP_SECONDS), 1) : null,
     beatConfidence: round(tempo.confidence, 3),
     beats: beats.map((b) => round(b * HOP_SECONDS, 3)),
+    speech: detectSpeech(voiceBand, fullBand, energy),
     raw: { energy, envelope },
   };
 }
@@ -115,6 +124,42 @@ function pickOnsets(env: Float32Array): { t: number; strength: number }[] {
     last = i;
   }
   return out;
+}
+
+// Estimativa barata de voz (independe do whisper): em janelas de 0.5s, fala tem quase toda a
+// energia na banda 300–3400 Hz e oscila no ritmo das sílabas (3–8 Hz), ao contrário de bumbo,
+// pads e explosões. Não separa fala de canto — para legendas isso é aceitável.
+export function detectSpeech(voiceBand: Float32Array, fullBand: Float32Array, energy: Float32Array): { start: number; end: number }[] {
+  const win = Math.round(0.5 / HOP_SECONDS);
+  const flags: boolean[] = [];
+  for (let i = 0; i + win <= voiceBand.length; i += win) {
+    let v = 0;
+    let f = 0;
+    let e = 0;
+    const env: number[] = [];
+    for (let j = i; j < i + win; j++) {
+      v += voiceBand[j];
+      f += fullBand[j];
+      e += energy[j];
+      env.push(Math.sqrt(voiceBand[j]));
+    }
+    const ratio = f > 0 ? v / f : 0;
+    const mean = env.reduce((a, b) => a + b, 0) / env.length;
+    const sd = Math.sqrt(env.reduce((a, b) => a + (b - mean) ** 2, 0) / env.length);
+    const modulation = mean > 0 ? sd / mean : 0;
+    flags.push(ratio > 0.55 && modulation > 0.3 && e / win > 0.06);
+  }
+  // Junta janelas vizinhas (tolera 1 janela de pausa) e descarta trechos curtos.
+  const ranges: { start: number; end: number }[] = [];
+  for (let k = 0; k < flags.length; k++) {
+    if (!flags[k]) continue;
+    const start = k * win * HOP_SECONDS;
+    const end = (k + 1) * win * HOP_SECONDS;
+    const last = ranges[ranges.length - 1];
+    if (last && start - last.end <= 0.5 + 1e-6) last.end = end;
+    else ranges.push({ start, end });
+  }
+  return ranges.filter((r) => r.end - r.start >= 1).map((r) => ({ start: round(r.start, 2), end: round(r.end, 2) }));
 }
 
 // Impacto = ataque espectral + salto de energia (booms graves quase não aparecem no flux).

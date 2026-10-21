@@ -14,8 +14,10 @@ import { Splashes3D } from "../three/Splashes3D";
 
 export const Short: React.FC<ShortProps> = ({ plan, shortIndex }) => {
   useFonts();
-  const short = plan.shorts[shortIndex] ?? plan.shorts[0];
-  const tl = useMemo(() => resolveTimeline(short, FPS), [short]);
+  const short = plan ? (plan.shorts[shortIndex] ?? plan.shorts[0]) : undefined;
+  const tl = useMemo(() => (short ? resolveTimeline(short, FPS) : null), [short]);
+  // O plano chega pelo calculateMetadata (Studio com slug) — antes disso não há o que desenhar.
+  if (!plan || !short || !tl) return null;
   const accent = short.accentColor;
 
   return (

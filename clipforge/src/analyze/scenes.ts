@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { ffmpeg } from "../ffmpeg";
+import { ffmpeg, filterValue } from "../ffmpeg";
 
 export type FrameScore = { t: number; score: number };
 export type SceneResult = {
@@ -13,7 +13,7 @@ export async function detectScenes(proxy: string, scoresFile: string): Promise<S
     "-i", proxy,
     "-an",
     "-vf",
-    `scale=320:-2,blackdetect=d=0.1:pix_th=0.10,select='gte(scene\\,0)',metadata=print:key=lavfi.scene_score:file=${scoresFile}`,
+    `scale=320:-2,blackdetect=d=0.1:pix_th=0.10,select='gte(scene\\,0)',metadata=print:key=lavfi.scene_score:file=${filterValue(scoresFile)}`,
     "-f", "null", "-",
   ]);
   const scores = parseScores(fs.readFileSync(scoresFile, "utf8"));

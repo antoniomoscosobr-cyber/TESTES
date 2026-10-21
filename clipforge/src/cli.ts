@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Command } from "commander";
 import { analyze, loadAnalysis } from "./analyze/index";
-import { FORMATS, ROOT, slugify, workPath, type FormatKey } from "./config";
+import { FORMATS, ROOT, slugFor, workPath, type FormatKey } from "./config";
 import { loadPlan, makePlan } from "./plan/index";
 import { renderPlan, renderPreview } from "./render/render";
 import { ensureSfx } from "./render/sfx";
@@ -18,15 +18,24 @@ const parseFormats = (v: string): FormatKey[] => {
   for (const f of list) if (!(f in FORMATS)) throw new Error(`Formato inválido: ${f} (use ${Object.keys(FORMATS).join(", ")})`);
   return list;
 };
-const parseList = (v: string) => v.split(",").map(Number).filter((n) => n > 0);
+const parseList = (v: string) => {
+  const list = v.split(",").map((s) => Number(s.trim()));
+  if (list.some((n) => !Number.isInteger(n) || n < 1)) throw new Error(`Lista inválida: "${v}" (use números a partir de 1, ex.: 1,3)`);
+  return list;
+};
+const parsePositive = (name: string) => (v: string) => {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`${name} inválido: "${v}"`);
+  return n;
+};
 
 program
   .command("analyze <trailer>")
   .description("Ingest + análise (cenas, áudio/beats, keyframes, transcrição)")
   .option("-s, --slug <slug>", "nome da pasta de trabalho")
-  .option("-f, --force", "refaz o proxy mesmo se já existir")
+  .option("-f, --force", "refaz tudo mesmo se o trailer não mudou")
   .action(async (trailer: string, o: { slug?: string; force?: boolean }) => {
-    await analyze(trailer, o.slug ?? slugify(path.basename(trailer)), { force: o.force });
+    await analyze(trailer, o.slug ?? slugFor(trailer), { force: o.force });
   });
 
 program
@@ -34,9 +43,10 @@ program
   .description("Escolhe os cortes e roteiriza os shorts (Claude ou heurística)")
   .option("--heuristic", "não usa a API do Claude")
   .option("-g, --game <nome>", "nome do jogo")
-  .option("-n, --count <n>", "quantos shorts", (v) => Number(v))
+  .option("-n, --count <n>", "quantos shorts", parsePositive("count"))
+  .option("--subs <arquivo>", "legendas .srt/.vtt (ex.: PT-BR) para usar no lugar da transcrição")
   .option("--no-sfx", "sem efeitos sonoros")
-  .action(async (slug: string, o: { heuristic?: boolean; game?: string; count?: number; sfx: boolean }) => {
+  .action(async (slug: string, o: { heuristic?: boolean; game?: string; count?: number; sfx: boolean; subs?: string }) => {
     await makePlan(loadAnalysis(slug), o);
   });
 
@@ -45,7 +55,7 @@ program
   .description("Renderiza os shorts do plan.json")
   .option("--format <lista>", "9x16,16x9", parseFormats, ["9x16", "16x9"] as FormatKey[])
   .option("--only <lista>", "só alguns shorts, ex.: 1,3", parseList)
-  .option("-c, --concurrency <n>", "abas de render em paralelo", (v) => Number(v))
+  .option("-c, --concurrency <n>", "abas de render em paralelo", parsePositive("concurrency"))
   .action(async (slug: string, o: { format: FormatKey[]; only?: number[]; concurrency?: number }) => {
     await renderPlan(loadPlan(slug), { formats: o.format, only: o.only, concurrency: o.concurrency });
   });
@@ -53,7 +63,7 @@ program
 program
   .command("preview <slug>")
   .description("Renderiza frames soltos (PNG) de um short para revisão rápida")
-  .option("-i, --index <n>", "qual short (1 = primeiro)", (v) => Number(v), 1)
+  .option("-i, --index <n>", "qual short (1 = primeiro)", parsePositive("index"), 1)
   .option("--format <f>", "9x16 ou 16x9", "9x16")
   .option("--at <segundos>", "tempos no short, ex.: 0.5,3,10", (v) => v.split(",").map(Number), [0.6, 3, 8, 15])
   .action(async (slug: string, o: { index: number; format: string; at: number[] }) => {
@@ -63,36 +73,48 @@ program
 
 program
   .command("make <trailer>")
-  .description("Tudo de uma vez: analyze → plan → render")
+  .description("Tudo de uma vez: analyze → plan → render (reaproveita análise e plano se o trailer não mudou)")
   .option("-s, --slug <slug>")
   .option("-g, --game <nome>")
-  .option("-n, --count <n>", "quantos shorts", (v) => Number(v))
-  .option("--heuristic")
+  .option("-n, --count <n>", "quantos shorts", parsePositive("count"))
+  .option("--heuristic", "não usa a API do Claude")
+  .option("--subs <arquivo>", "legendas .srt/.vtt para usar no lugar da transcrição")
   .option("--no-sfx")
   .option("--format <lista>", "9x16,16x9", parseFormats, ["9x16", "16x9"] as FormatKey[])
-  .option("-c, --concurrency <n>", "abas de render em paralelo", (v) => Number(v))
-  .option("-f, --force")
+  .option("-c, --concurrency <n>", "abas de render em paralelo", parsePositive("concurrency"))
+  .option("--reanalyze", "refaz a análise mesmo se o trailer não mudou")
+  .option("--replan", "refaz o plano (o anterior vira plan.N.json)")
   .action(async (trailer: string, o) => {
-    const slug = o.slug ?? slugify(path.basename(trailer));
-    const analysis = await analyze(trailer, slug, { force: o.force });
-    const plan = await makePlan(analysis, { heuristic: o.heuristic, game: o.game, count: o.count, sfx: o.sfx });
+    const slug: string = o.slug ?? slugFor(trailer);
+    const analysis = await analyze(trailer, slug, { force: o.reanalyze, reuse: !o.reanalyze });
+    const hasPlan = fs.existsSync(workPath(slug, "plan.json"));
+    const plan =
+      hasPlan && !o.replan && !analysis.fresh
+        ? (console.log("• plano: reaproveitando plan.json (use --replan para refazer)"), loadPlan(slug))
+        : await makePlan(analysis, { heuristic: o.heuristic, game: o.game, count: o.count, sfx: o.sfx, subs: o.subs });
     const files = await renderPlan(plan, { formats: o.format, concurrency: o.concurrency });
-    console.log(`\n✓ ${files.length} vídeos prontos em out/${slug}/`);
+    console.log(`\n✓ ${files.length} vídeos prontos em ${path.relative(process.cwd(), path.join(ROOT, "out", slug)) || "."}/`);
   });
 
 program
   .command("studio [slug]")
-  .description("Abre o Remotion Studio com o plano (ou a demo) para revisar")
-  .option("-i, --index <n>", "qual short abrir (1 = primeiro)", (v) => Number(v), 1)
+  .description("Abre o Remotion Studio com o plano (ou a demo). Edite public/work/<slug>/plan.json e recarregue.")
+  .option("-i, --index <n>", "qual short abrir (1 = primeiro)", parsePositive("index"), 1)
   .action(async (slug: string | undefined, o: { index: number }) => {
     await ensureSfx();
     const args = ["remotion", "studio", "remotion/index.ts"];
     if (slug) {
+      loadPlan(slug); // valida antes de abrir
       const propsFile = workPath(slug, "studio-props.json");
-      fs.writeFileSync(propsFile, JSON.stringify({ plan: loadPlan(slug), shortIndex: o.index - 1 }));
+      fs.writeFileSync(propsFile, JSON.stringify({ slug, shortIndex: o.index - 1 }));
       args.push(`--props=${propsFile}`);
+      console.log(`• Studio: editando ${path.relative(process.cwd(), workPath(slug, "plan.json"))} — salve e recarregue a página para ver.`);
     }
-    spawn("npx", args, { cwd: ROOT, stdio: "inherit" });
+    const child = spawn(process.platform === "win32" ? "npx.cmd" : "npx", args, { cwd: ROOT, stdio: "inherit", shell: process.platform === "win32" });
+    await new Promise<void>((resolve, reject) => {
+      child.on("error", reject);
+      child.on("exit", (code) => (code === 0 || code === null ? resolve() : reject(new Error(`remotion studio saiu com código ${code}`))));
+    });
   });
 
 program.parseAsync().catch((err: Error) => {

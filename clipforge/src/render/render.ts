@@ -39,7 +39,7 @@ export async function renderPlan(plan: EditPlan, opts: RenderOptions): Promise<s
     if (opts.only?.length && !opts.only.includes(i + 1)) continue;
     for (const fmt of opts.formats) {
       const { id } = FORMATS[fmt];
-      const inputProps: ShortProps = { plan, shortIndex: i };
+      const inputProps: ShortProps = { plan, slug: "", shortIndex: i };
       const composition = await selectComposition({ serveUrl, id, inputProps, browserExecutable, chromiumOptions });
       const outputLocation = path.join(outDir, `${short.id}-${fmt}.mp4`);
       const t0 = Date.now();
@@ -78,7 +78,7 @@ export async function renderPreview(plan: EditPlan, opts: { short: number; forma
   const { serveUrl, browserExecutable } = await prepare();
   const short = plan.shorts[opts.short - 1];
   if (!short) throw new Error(`Short ${opts.short} não existe (o plano tem ${plan.shorts.length}).`);
-  const inputProps: ShortProps = { plan, shortIndex: opts.short - 1 };
+  const inputProps: ShortProps = { plan, slug: "", shortIndex: opts.short - 1 };
   const composition = await selectComposition({ serveUrl, id: FORMATS[opts.format].id, inputProps, browserExecutable, chromiumOptions });
   const dir = path.join(OUT_DIR, plan.slug, "preview");
   fs.mkdirSync(dir, { recursive: true });

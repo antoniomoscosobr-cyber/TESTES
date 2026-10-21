@@ -14,6 +14,8 @@ export const demoPlan: EditPlan = {
     {
       id: "short-01",
       title: "Demo",
+      description: "Plano de demonstração.",
+      hashtags: ["#demo"],
       hook: { text: "VOCÊ NÃO ESTÁ PRONTO PRA ISSO", sub: "assiste até o final" },
       segments: [
         { srcStart: 40, srcEnd: 42, speed: 1, focusX: 0.5, fit: "crop" },
