@@ -1,0 +1,7 @@
+node_modules
+out
+public/work
+.whisper
+*.log
+fixtures
+public/sfx/*.wav

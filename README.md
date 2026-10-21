@@ -1,3 +1,10 @@
+# TESTES
+
+- **Site Floral Bowl** (raiz): React + Vite, publicado no GitHub Pages.
+- **[ClipForge](clipforge/README.md)** (`clipforge/`): gera shorts automáticos a partir de trailers de games — cortes, legendas dinâmicas PT-BR e splashes em GSAP/Three.js, renderizados com Remotion.
+
+---
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
